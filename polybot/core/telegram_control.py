@@ -115,6 +115,48 @@ def _run_hunt():
     _run_evaluate()
 
 
+def _run_kapan():
+    """Daftar tanggal resolve tiap taruhan IKUT yang belum resolve, urut paling dekat.
+    Pakai end_date dari riwayat; kalau kosong (taruhan lama) fetch dari CLOB."""
+    from datetime import datetime, timezone
+    from . import tracker
+    rows = tracker.baca_semua()
+    seen, items = set(), []
+    for r in rows:
+        if r.get("aksi") != "ikut" or r.get("resolved"):
+            continue
+        cid, outcome = r.get("condition_id", ""), r.get("outcome", "")
+        if (cid, outcome) in seen:
+            continue
+        seen.add((cid, outcome))
+        end = (r.get("end_date") or "").strip()
+        if not end and cid:
+            m = api.clob_market(cid)
+            if m:
+                end = m.get("end_date_iso") or ""
+        items.append((end, r.get("market", ""), outcome))
+
+    if not items:
+        print("Belum ada taruhan IKUT aktif yang perlu dicek.")
+        return
+
+    items.sort(key=lambda it: it[0] or "9999-12-31")
+    today = datetime.now(timezone.utc).date()
+    print(f"📅 Resolve {len(items)} taruhan aktif (urut paling dekat):\n")
+    for end, market, outcome in items:
+        if not end:
+            print(f"• (tanggal ?) — {market[:42]} '{outcome}'")
+            continue
+        tgl = str(end)[:10]
+        try:
+            sisa = (datetime.strptime(tgl, "%Y-%m-%d").date() - today).days
+            sisa_txt = ("hari ini" if sisa == 0 else
+                        f"{sisa} hari lagi" if sisa > 0 else f"lewat {abs(sisa)} hari")
+        except ValueError:
+            sisa_txt = "?"
+        print(f"• {tgl} ({sisa_txt}) — {market[:42]} '{outcome}'")
+
+
 def _status_text():
     live = (not config.Common.SIMULASI_MODE) and config.LIVE_TRADING_ENABLED
     from ..config import CopyTrade, Arbitrage, Scanner
@@ -137,6 +179,7 @@ HELP = (
     "/arb — scan arbitrage\n"
     "/copy — copy-trade 1 pass\n"
     "/evaluate — cek win/loss\n"
+    "/kapan — tanggal resolve tiap taruhan aktif\n"
     "/hunt — siklus penuh sekali\n"
     "/loop [menit] — nyari peluang terus (default 30m)\n"
     "/stop — hentikan loop\n"
@@ -318,6 +361,8 @@ def _handle(text):
         _enqueue("copy", _run_copy)
     elif cmd == "evaluate":
         _enqueue("evaluate", _run_evaluate)
+    elif cmd == "kapan":
+        _enqueue("kapan", _run_kapan)
     elif cmd == "hunt":
         _enqueue("hunt", _run_hunt)
     elif cmd == "loop":
@@ -353,6 +398,7 @@ def _register_commands():
         {"command": "arb", "description": "scan arbitrage"},
         {"command": "copy", "description": "copy-trade 1 pass"},
         {"command": "evaluate", "description": "cek win/loss"},
+        {"command": "kapan", "description": "tanggal resolve taruhan aktif"},
         {"command": "hunt", "description": "siklus penuh sekali"},
         {"command": "loop", "description": "nyari peluang terus (menit)"},
         {"command": "stop", "description": "hentikan loop"},

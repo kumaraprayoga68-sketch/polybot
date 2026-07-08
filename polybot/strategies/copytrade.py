@@ -113,7 +113,7 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
 
     if keputusan == "SKIP":
         tracker.catat("copytrade", "skip", market=info["market"][:60], condition_id=cid,
-                      outcome=outcome, harga=harga, skor=skor,
+                      outcome=outcome, harga=harga, skor=skor, end_date=info.get("end_date", ""),
                       keterangan=f"{len(pendukung)} trader")
         print(f"  ⏭️  SKIP {info['market'][:45]} — skor {skor} < {threshold}")
         return False
@@ -129,7 +129,7 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
     size = round(Common.MAX_PER_TRADE * frac, 2)
     if size <= 0:
         tracker.catat("copytrade", "skip_kelly", market=info["market"][:60], condition_id=cid,
-                      outcome=outcome, harga=harga, skor=skor,
+                      outcome=outcome, harga=harga, skor=skor, end_date=info.get("end_date", ""),
                       keterangan="Kelly=0 (harga gak ngasih edge)")
         print(f"  ⏭️  SKIP(Kelly) {info['market'][:45]} — harga ${harga} gak ada edge")
         return False
@@ -138,6 +138,7 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
     tag = " [agresif]" if agresif else ""
     tracker.catat("copytrade", "ikut", market=info["market"][:60], condition_id=cid,
                   outcome=outcome, harga=harga, size_usd=size, skor=skor,
+                  end_date=info.get("end_date", ""),
                   keterangan=f"{len(pendukung)} trader · {hasil['status']}{tag}")
     print(f"  ✅ IKUT {info['market'][:45]} '{outcome}' ${size} (skor {skor}, {hasil['status']}){tag}")
     notify.alert_sinyal("✅ Copy-trade signal" + tag, [
