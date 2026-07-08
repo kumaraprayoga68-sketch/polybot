@@ -11,9 +11,21 @@ Pipeline:
  6. Eksekusi paper/live (executor, triple-gated). Semua dicatat (tracker).
 """
 import time
+from datetime import datetime, timezone
 
 from ..core import api, executor, scoring, kelly, tracker, notify, trader_pnl
 from ..config import CopyTrade, Common
+
+
+def _hari_ke_resolve(end_date):
+    """Berapa hari lagi market resolve dari sekarang. None kalau tanggal gak kebaca."""
+    if not end_date:
+        return None
+    try:
+        d = datetime.strptime(str(end_date)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return (d - datetime.now(timezone.utc).date()).days
 
 
 def _agresif():
@@ -72,6 +84,7 @@ def _snapshot_posisi(wallet):
             snap[(cid, outcome)] = {
                 "market": p.get("title", p.get("question", "N/A")),
                 "harga": cur if cur > 0 else None,
+                "end_date": p.get("endDate", ""),
             }
     return snap
 
@@ -150,9 +163,15 @@ def satu_siklus(wallets, performa, state):
     # paper agresif: 1 trader udah cukup jadi sinyal (bukan butuh consensus 2)
     butuh = 1 if (CopyTrade.SINGLE_TRADER_MODE or _agresif()) else 2
     bet_count = 0
+    skip_jauh = 0
     for (cid, outcome), data in holders.items():
         pendukung = data["pendukung"]
         if len(pendukung) < butuh:
+            continue
+        # filter resolve: skip market yang resolve-nya lebih dari MAX_HARI_KE_RESOLVE
+        hari = _hari_ke_resolve(data["info"].get("end_date"))
+        if hari is not None and hari > CopyTrade.MAX_HARI_KE_RESOLVE:
+            skip_jauh += 1
             continue
         if _evaluasi_sinyal(cid, outcome, data["info"], pendukung, performa):
             bet_count += 1
@@ -161,6 +180,8 @@ def satu_siklus(wallets, performa, state):
                 print(f"  ⏸️  cap {CopyTrade.AGG_MAX_BETS} bet/siklus tercapai — sisanya siklus berikut.")
                 break
 
+    if skip_jauh:
+        print(f"  ⏭️  {skip_jauh} market di-skip (resolve > {CopyTrade.MAX_HARI_KE_RESOLVE} hari).")
     state["last"] = posisi_sekarang
 
 

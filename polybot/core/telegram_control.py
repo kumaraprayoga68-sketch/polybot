@@ -146,6 +146,7 @@ HELP = (
     "/window [1d|7d|30d|all] — window leaderboard copy-trade\n"
     "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
     "/kelly [on|off] — sizing Kelly (off = flat, gak penakut)\n"
+    "/resolve [hari] — cuma copy market resolve ≤ N hari (feedback cepet)\n"
     "/ping — cek bot hidup"
 )
 
@@ -260,6 +261,24 @@ def _cmd_agresif(arg):
         send("✅ <b>Mode agresif OFF</b> — balik ke logika selektif (skor + Kelly + consensus).")
 
 
+def _cmd_resolve(arg):
+    """Set max hari ke resolve — bot cuma copy market yang resolve <= N hari (feedback cepet)."""
+    from ..config import CopyTrade
+    if not arg:
+        send(f"Max hari ke resolve: <b>{CopyTrade.MAX_HARI_KE_RESOLVE} hari</b>\n"
+             f"Bot cuma ikut market yang resolve ≤ segini (biar hasil W/L cepet keliatan).\n"
+             f"Ganti: /resolve 14")
+        return
+    try:
+        n = max(1, int(arg))
+    except ValueError:
+        send("❌ Isi angka hari, mis. /resolve 14")
+        return
+    CopyTrade.MAX_HARI_KE_RESOLVE = n
+    send(f"✅ Max resolve di-set ke <b>{n} hari</b>. Bot bakal skip market yang "
+         f"resolve-nya lebih jauh dari itu (fokus jangka pendek).")
+
+
 def _cmd_kelly(arg):
     """Toggle Kelly sizing. Off = flat sizing (gak diciutin — Kelly kadang 'terlalu takut')."""
     from ..config import CopyTrade
@@ -321,6 +340,8 @@ def _handle(text):
         _cmd_agresif(arg)
     elif cmd == "kelly":
         _cmd_kelly(arg)
+    elif cmd == "resolve":
+        _cmd_resolve(arg)
     else:
         send(f"❓ Command tidak dikenal: /{html.escape(cmd)}\n{HELP}")
 
@@ -341,6 +362,7 @@ def _register_commands():
         {"command": "window", "description": "window leaderboard (1d/7d/30d/all)"},
         {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
         {"command": "kelly", "description": "sizing Kelly on/off (off=flat)"},
+        {"command": "resolve", "description": "copy market resolve <= N hari"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},
     ]
