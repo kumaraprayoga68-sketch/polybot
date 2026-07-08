@@ -77,6 +77,12 @@ class CopyTrade:
     MAX_HARI_KE_RESOLVE = int(_env_float("MAX_HARI_KE_RESOLVE", 90))
     TOP_N_TRADER        = int(_env_float("TOP_N_TRADER", 5))
     LEADERBOARD_WINDOW  = os.getenv("LEADERBOARD_WINDOW", "30d")  # 1d / 7d / 30d / all
+    # --- MODE AGRESIF (khusus PAPER, buat ngumpulin data biar gak skip mulu) ---
+    # Cuma aktif kalau SIMULASI_MODE=True. Di live, otomatis balik selektif (aman).
+    AGGRESSIVE          = _env_bool("COPYTRADE_AGGRESSIVE", False)
+    AGG_MIN_WIN_RATE    = _env_float("AGG_MIN_WIN_RATE", 40.0)   # screening dilonggarin
+    AGG_FLAT_FRAC       = _env_float("AGG_FLAT_FRAC", 0.3)       # size fallback kalau Kelly=0
+    AGG_MAX_BETS        = int(_env_float("AGG_MAX_BETS", 10))    # cap IKUT per siklus (anti-flood)
 
 
 class Arbitrage:

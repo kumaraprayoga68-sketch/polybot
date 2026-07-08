@@ -144,6 +144,7 @@ HELP = (
     "/live — aktifin trading beneran (2 langkah konfirmasi)\n"
     "/paper — balik ke simulasi (aman)\n"
     "/window [1d|7d|30d|all] — window leaderboard copy-trade\n"
+    "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
     "/ping — cek bot hidup"
 )
 
@@ -239,6 +240,25 @@ def _cmd_window(arg):
          f"⚠️ restart bot balik ke default (.env LEADERBOARD_WINDOW).")
 
 
+def _cmd_agresif(arg):
+    """Toggle mode agresif copy-trade (paper only) — biar bot ikut bet, bukan skip mulu."""
+    from ..config import CopyTrade
+    if arg not in ("on", "off"):
+        status = "ON 🔥" if CopyTrade.AGGRESSIVE else "OFF"
+        aktif = "aktif" if (CopyTrade.AGGRESSIVE and config.Common.SIMULASI_MODE) else "gak aktif (butuh PAPER)"
+        send(f"Mode agresif copy-trade: <b>{status}</b> ({aktif})\n"
+             f"Aktifin: /agresif on · Matiin: /agresif off\n"
+             f"<i>Cuma jalan di paper. Di live otomatis balik selektif.</i>")
+        return
+    CopyTrade.AGGRESSIVE = (arg == "on")
+    if arg == "on":
+        send("🔥 <b>Mode agresif ON</b> (paper) — bot bakal IKUT bet lebih banyak "
+             "biar ngumpulin data, bukan skip mulu.\n"
+             "<i>Otomatis nonaktif kalau mode live.</i>")
+    else:
+        send("✅ <b>Mode agresif OFF</b> — balik ke logika selektif (skor + Kelly + consensus).")
+
+
 def _handle(text):
     parts = text.strip().split()
     cmd = parts[0].lower().lstrip("/").split("@")[0]  # /cmd@botname -> cmd
@@ -276,6 +296,8 @@ def _handle(text):
         _cmd_paper()
     elif cmd == "window":
         _cmd_window(arg)
+    elif cmd in ("agresif", "aggressive"):
+        _cmd_agresif(arg)
     else:
         send(f"❓ Command tidak dikenal: /{html.escape(cmd)}\n{HELP}")
 
@@ -294,6 +316,7 @@ def _register_commands():
         {"command": "live", "description": "aktifin trading beneran"},
         {"command": "paper", "description": "balik ke simulasi (aman)"},
         {"command": "window", "description": "window leaderboard (1d/7d/30d/all)"},
+        {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},
     ]

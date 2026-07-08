@@ -27,6 +27,8 @@ jobs:
       ARB_MAX_MARKET: "800"          # batasi biar scan cepat & hemat menit
       ARB_MIN_EDGE_PCT: "5"
       SCANNER_MIN_VOLUME: "50000"
+      COPYTRADE_AGGRESSIVE: "true"   # paper: ikut bet biar ngumpulin data (aman, CI selalu paper)
+      LEADERBOARD_WINDOW: "30d"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
