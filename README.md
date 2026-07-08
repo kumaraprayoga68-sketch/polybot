@@ -47,10 +47,38 @@ python -m polybot arbitrage --loop    # loop tiap ARB_SCAN_INTERVAL_MIN
 python -m polybot copytrade           # 1 siklus copy-trade
 python -m polybot copytrade --loop    # monitor terus
 python -m polybot all --loop          # scanner + arbitrage + copytrade
+python -m polybot evaluate            # cek win/loss market yang udah resolve
+python -m polybot telegram            # kontrol bot dari Telegram (lihat bawah)
 ```
 
 Semua peluang/keputusan tercatat di `data/riwayat.csv` dan (kalau Telegram diisi)
 dikirim sebagai alert.
+
+## Kontrol dari Telegram
+
+Jalankan listener sekali, lalu kendalikan bot langsung dari chat:
+
+```bash
+python -m polybot telegram
+```
+
+Command di chat (butuh `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` di `.env`):
+
+| Command | Fungsi |
+|---|---|
+| `/scan` | discovery market by kategori |
+| `/arb` | scan peluang arbitrage |
+| `/copy` | copy-trade 1 pass |
+| `/evaluate` | cek win/loss market resolve |
+| `/hunt` | siklus penuh sekali (arb + scan + copy + evaluate) |
+| `/loop [menit]` | **nyari peluang terus** tiap N menit (default 30) |
+| `/stop` | hentikan loop |
+| `/status` · `/ping` · `/help` | status / cek hidup / bantuan |
+
+Pakai long-polling — **tidak butuh URL publik / webhook**. Cuma merespons chat ID
+kamu (chat lain diabaikan). Live trading tetap **tidak** bisa dipicu dari sini
+(butuh gate lokal + wallet). Hasil tiap command dibalas ke chat + tetap masuk ke
+dashboard & `riwayat.csv`.
 
 ## Keamanan Live Trading (TRIPLE GATE)
 

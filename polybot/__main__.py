@@ -82,6 +82,11 @@ def cmd_evaluate(_):
     evaluate.run()
 
 
+def cmd_telegram(_):
+    from .core import telegram_control
+    telegram_control.run()
+
+
 def cmd_test_connection(_):
     from .core import executor
     executor.cek_koneksi()
@@ -113,6 +118,7 @@ def main():
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("scan").set_defaults(func=cmd_scan)
     sub.add_parser("evaluate").set_defaults(func=cmd_evaluate)
+    sub.add_parser("telegram").set_defaults(func=cmd_telegram)
     sub.add_parser("test-connection").set_defaults(func=cmd_test_connection)
 
     pa = sub.add_parser("arbitrage")

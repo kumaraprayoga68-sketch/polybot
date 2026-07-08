@@ -21,8 +21,8 @@ def pilih_trader():
     if not CopyTrade.AUTO_PILIH_TRADER and CopyTrade.DAFTAR_TRADER_MANUAL:
         wallets = CopyTrade.DAFTAR_TRADER_MANUAL
     else:
-        print("🔍 [copytrade] scan leaderboard + screening net PnL…")
-        lb = api.leaderboard(window="30d", limit=100)
+        print(f"🔍 [copytrade] scan leaderboard ({CopyTrade.LEADERBOARD_WINDOW}) + screening net PnL…")
+        lb = api.leaderboard(window=CopyTrade.LEADERBOARD_WINDOW, limit=100)
         kandidat = []
         for row in lb:
             addr = row.get("proxyWallet") or row.get("wallet") or row.get("address") or row.get("user")

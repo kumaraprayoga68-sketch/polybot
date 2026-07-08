@@ -76,6 +76,7 @@ class CopyTrade:
     MIN_NET_PNL         = _env_float("MIN_NET_PNL", 0.0)
     MAX_HARI_KE_RESOLVE = int(_env_float("MAX_HARI_KE_RESOLVE", 90))
     TOP_N_TRADER        = int(_env_float("TOP_N_TRADER", 5))
+    LEADERBOARD_WINDOW  = os.getenv("LEADERBOARD_WINDOW", "30d")  # 1d / 7d / 30d / all
 
 
 class Arbitrage:
