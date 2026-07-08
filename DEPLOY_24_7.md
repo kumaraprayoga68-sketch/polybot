@@ -25,14 +25,13 @@ git push -u origin main
 ## 2. Set Secrets
 
 Di repo GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
-Tambah 4 ini (nilainya ada di `.env` lokal kamu):
+Tambah 3 ini (nilainya ada di `.env` lokal kamu):
 
 | Secret | Nilai |
 |--------|-------|
 | `TELEGRAM_BOT_TOKEN` | token bot Telegram |
 | `TELEGRAM_CHAT_ID` | chat id kamu |
 | `POLYBOT_DASHBOARD_URL` | `https://polybot-dashboard-eight.vercel.app` |
-| `POLYBOT_TOKEN` | access token dashboard |
 
 ## 3. Aktifkan & tes
 

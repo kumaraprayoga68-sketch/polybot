@@ -53,7 +53,6 @@ TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
 # Dashboard Vercel (opsional) — tiap event tercatat juga di-push ke sini buat
 # dipantau live dari web. Kosongkan buat matiin (tetap ada CSV lokal + Telegram).
 POLYBOT_DASHBOARD_URL = os.getenv("POLYBOT_DASHBOARD_URL", "")
-POLYBOT_TOKEN         = os.getenv("POLYBOT_TOKEN", "")
 
 # Auto-loop: kalau > 0, listener Telegram (`polybot telegram`) otomatis MULAI loop
 # hunt tiap N menit saat boot — biar loop nyambung terus walau listener restart

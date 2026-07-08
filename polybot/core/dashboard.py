@@ -1,5 +1,5 @@
 """
-Push event ke dashboard Vercel (polybot-dashboard). Fail-safe total: kalau URL/token
+Push event ke dashboard Vercel (polybot-dashboard). Fail-safe total: kalau URL
 gak diset atau gagal kirim, cuma di-skip — gak pernah nge-block bot lokal.
 Dipakai berdampingan dengan Telegram (notify.py): bot lokal kirim ke dua-duanya.
 """
@@ -13,11 +13,8 @@ def push_event(event):
     if not url:
         return False
     try:
-        headers = {"Content-Type": "application/json"}
-        if config.POLYBOT_TOKEN:
-            headers["x-polybot-token"] = config.POLYBOT_TOKEN
         r = requests.post(url.rstrip("/") + "/api/event", json=event,
-                          headers=headers, timeout=5)
+                          headers={"Content-Type": "application/json"}, timeout=5)
         return r.ok
     except Exception:
         return False

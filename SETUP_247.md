@@ -22,16 +22,15 @@ git push -u origin main
 Kalau diminta password → pakai **Personal Access Token** (github.com → Settings →
 Developer settings → Tokens), bukan password akun.
 
-## 3. Tambah 4 Secrets
+## 3. Tambah 3 Secrets
 Repo → **Settings → Secrets and variables → Actions → New repository secret**.
-Bikin 4 (nama harus persis):
+Bikin 3 (nama harus persis):
 
 | Name | Value |
 |------|-------|
 | `TELEGRAM_BOT_TOKEN` | token bot Telegram kamu |
 | `TELEGRAM_CHAT_ID` | chat id kamu |
 | `POLYBOT_DASHBOARD_URL` | `https://polybot-dashboard-eight.vercel.app` |
-| `POLYBOT_TOKEN` | access token dashboard |
 
 ## 4. Aktifin & test
 - Repo → tab **Actions** → kalau ada tombol enable, klik.
