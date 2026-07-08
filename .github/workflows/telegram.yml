@@ -1,0 +1,74 @@
+name: polybot Telegram control (listener 24/7)
+
+# Listener interaktif Telegram — DENGERIN command kamu (/status /hunt /agresif
+# /kelly /window dll) lalu BALAS. Beda dari hunt.yml yang cuma kirim alert satu
+# arah; ini yang bikin bot Telegram bisa jawab tanpa laptop nyala.
+#
+# Long-polling (getUpdates) butuh proses hidup terus. Job Actions maksimal ~6 jam,
+# jadi listener jalan ~5j40m lalu job ini nge-DISPATCH DIRINYA SENDIRI (restart) —
+# nyambung terus. `cancel-in-progress` jamin cuma 1 listener hidup (hindari konflik
+# getUpdates 409 kalau dua poller jalan barengan).
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 */5 * * *"   # backup restart (GitHub schedule = best-effort)
+
+permissions:
+  actions: write            # buat self re-dispatch (restart diri sendiri)
+
+concurrency:
+  group: polybot-telegram
+  cancel-in-progress: true  # cuma 1 listener hidup dalam satu waktu
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      # SELALU paper — live TIDAK PERNAH dari CI (butuh PRIVATE_KEY yg gak ada di secrets).
+      SIMULASI_MODE: "true"
+      LIVE_TRADING_ENABLED: "false"
+      COPYTRADE_AGGRESSIVE: "true"
+      KELLY_ENABLED: "false"
+      FLAT_FRAC: "0.5"
+      MAX_HARI_KE_RESOLVE: "14"
+      LEADERBOARD_WINDOW: "30d"
+      ARB_MAX_MARKET: "800"
+      ARB_MIN_EDGE_PCT: "5"
+      SCANNER_MIN_VOLUME: "50000"
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
+      POLYBOT_TOKEN: ${{ secrets.POLYBOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install requests python-dotenv
+
+      - name: Jalankan listener (~5j40m lalu exit buat restart)
+        id: listen
+        run: |
+          START=$(date +%s)
+          timeout 340m python -m polybot telegram || true
+          echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+
+      - name: Restart diri sendiri (nyambung 24/7)
+        if: always()
+        run: |
+          ELAPSED="${{ steps.listen.outputs.elapsed }}"
+          # REM ANTI-RUNAWAY: kalau listener mati cepet (<5 menit) kemungkinan besar
+          # config/secret salah — JANGAN restart biar gak spam job tak terhingga.
+          # Betulin secret lalu kick manual dari tab Actions.
+          if [ "${ELAPSED:-0}" -lt 300 ]; then
+            echo "::warning::Listener cuma jalan ${ELAPSED}s — cek TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID. Restart otomatis DITAHAN."
+            exit 0
+          fi
+          echo "Listener jalan ${ELAPSED}s — restart untuk sesi berikutnya."
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/telegram.yml/dispatches" \
+            -d "{\"ref\":\"${{ github.ref_name }}\"}"

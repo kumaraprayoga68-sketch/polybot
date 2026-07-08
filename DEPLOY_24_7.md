@@ -44,6 +44,23 @@ Tambah 4 ini (nilainya ada di `.env` lokal kamu):
 Setelah itu jalan sendiri tiap 30 menit. Ubah jadwal di
 `.github/workflows/hunt.yml` (baris `cron`).
 
+## Bikin bot Telegram BISA DIBALES (tanpa laptop)
+
+`hunt.yml` cuma kirim alert **satu arah**. Biar bot Telegram jawab command
+(`/status`, `/hunt`, `/agresif`, `/kelly`, `/window`, dll) walau laptop mati,
+ada workflow kedua: **`.github/workflows/telegram.yml`** yang jalanin listener
+`python -m polybot telegram` nonstop dan **restart sendiri tiap ~5,5 jam**.
+
+Aktifin: tab **Actions** → **"polybot Telegram control (listener 24/7)"** →
+**Run workflow** (sekali aja — habis itu nyambung sendiri). Pakai secret yang
+sama (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). Tes: kirim `/ping` di chat →
+harusnya dibales `🏓 pong`.
+
+> Catatan: GitHub Actions bukan dirancang buat service nonstop — kalau listener
+> mati cepet (<5 menit) restart otomatis ditahan (kemungkinan secret salah).
+> Buat yang bener-bener stabil, host listener di mesin always-on (VPS/Railway/
+> Render/Oracle free) — tapi buat paper trading, cara ini udah cukup.
+
 ## Catatan
 
 - **Live trading TIDAK PERNAH dari CI** — workflow hard-set `SIMULASI_MODE=true`.
