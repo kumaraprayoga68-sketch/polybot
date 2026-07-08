@@ -8,6 +8,7 @@ Solusi: /positions (curPrice 0/1 = resolved) untuk kalah + menang-belum-klaim,
 /activity (REDEEM/SELL) untuk menang-sudah-klaim, digabung by conditionId.
 """
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from . import api
 
 REBATE_TYPES = {"MAKER_REBATE", "TAKER_REBATE", "REWARD", "YIELD"}
@@ -25,7 +26,8 @@ def _fetch_resolved_positions(wallet):
     return resolved
 
 
-def _fetch_activity_all(wallet, page_size=500, max_records=5000):
+def _fetch_activity_all(wallet, page_size=500, max_records=1500):
+    # 1500 record cukup buat estimasi win rate; lebih dari itu bikin screening lambat.
     semua, offset = [], 0
     while len(semua) < max_records:
         page = api.trader_activity(wallet, limit=page_size, offset=offset)
@@ -90,15 +92,20 @@ def hitung_net_pnl(wallet):
     }
 
 
-def screening(daftar_wallet, min_closed=5, min_net_pnl=0, min_win_rate=50):
-    """Screening trader pake net PnL gabungan. Balikin (lolos, gagal)."""
+def screening(daftar_wallet, min_closed=5, min_net_pnl=0, min_win_rate=50, workers=8):
+    """
+    Screening trader pake net PnL gabungan, PARALEL (tiap wallet butuh beberapa
+    request). Balikin (lolos, gagal).
+    """
     lolos, gagal = [], []
-    for wallet in daftar_wallet:
-        hasil = hitung_net_pnl(wallet)
-        if not hasil or hasil["total_closed"] < min_closed:
-            continue
-        if hasil["net_pnl"] >= min_net_pnl and hasil["win_rate"] >= min_win_rate:
-            lolos.append(hasil)
-        else:
-            gagal.append(hasil)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(hitung_net_pnl, w): w for w in daftar_wallet}
+        for fut in as_completed(futs):
+            hasil = fut.result()
+            if not hasil or hasil["total_closed"] < min_closed:
+                continue
+            if hasil["net_pnl"] >= min_net_pnl and hasil["win_rate"] >= min_win_rate:
+                lolos.append(hasil)
+            else:
+                gagal.append(hasil)
     return lolos, gagal

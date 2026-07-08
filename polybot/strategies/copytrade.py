@@ -28,7 +28,7 @@ def pilih_trader():
             addr = row.get("proxyWallet") or row.get("wallet") or row.get("address") or row.get("user")
             if addr:
                 kandidat.append(addr)
-        wallets = kandidat[:40] or CopyTrade.DAFTAR_TRADER_MANUAL
+        wallets = kandidat[:20] or CopyTrade.DAFTAR_TRADER_MANUAL
 
     lolos, _ = trader_pnl.screening(
         wallets, min_closed=5,

@@ -35,7 +35,7 @@ def _env_float(name, default):
 GAMMA_URL       = "https://gamma-api.polymarket.com/markets"
 CLOB_HOST       = "https://clob.polymarket.com"
 DATA_API        = "https://data-api.polymarket.com"
-LEADERBOARD_URL = "https://lb-api.polymarket.com/leaderboard"
+LEADERBOARD_URL = "https://lb-api.polymarket.com/profit"
 
 # ── KREDENSIAL (dari .env, cuma perlu buat LIVE trading) ───────────────────────
 PRIVATE_KEY    = os.getenv("PRIVATE_KEY", "")

@@ -154,8 +154,8 @@ def trader_activity(wallet, limit=500, offset=0, activity_type=None):
 # ── LEADERBOARD: auto-pilih trader ────────────────────────────────────────────
 def leaderboard(window="30d", limit=100):
     """
-    Ambil leaderboard Polymarket (window mis. '30d'). Balikin list trader
-    (address + metric). Struktur bisa berubah; caller wajib defensif.
+    Top trader by profit dari lb-api /profit (window mis. '30d'/'7d'/'all').
+    Balikin list dict berisi 'proxyWallet' + 'pseudonym' + 'amount' (profit).
     """
     data = _get(config.LEADERBOARD_URL, params={"window": window, "limit": limit})
     if isinstance(data, list):
