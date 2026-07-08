@@ -1,0 +1,4 @@
+requests>=2.31
+python-dotenv>=1.0
+# Cuma dibutuhin buat LIVE trading (eksekusi order). Paper trading gak perlu:
+py-clob-client>=0.34.6

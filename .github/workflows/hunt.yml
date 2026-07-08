@@ -1,0 +1,62 @@
+name: polybot 24/7 (cari peluang + evaluasi)
+
+# Siklus penuh tiap 30 menit — TANPA laptop nyala:
+#   arbitrage scan -> market discovery -> copytrade (paper) -> evaluate hasil
+# lalu simpan riwayat.csv balik ke repo biar state (dedup + histori) persisten.
+# Semua hasil dikirim ke Telegram + dashboard Vercel.
+on:
+  schedule:
+    - cron: "*/30 * * * *"     # tiap 30 menit
+  workflow_dispatch: {}          # trigger manual dari tab Actions
+
+permissions:
+  contents: write                # buat commit riwayat.csv balik
+
+concurrency:
+  group: polybot-24-7
+  cancel-in-progress: false      # jangan batalin run yang lagi jalan
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      # SELALU paper di CI — live trading TIDAK PERNAH dari sini.
+      SIMULASI_MODE: "true"
+      LIVE_TRADING_ENABLED: "false"
+      ARB_MAX_MARKET: "800"          # batasi biar scan cepat & hemat menit
+      ARB_MIN_EDGE_PCT: "5"
+      SCANNER_MIN_VOLUME: "50000"
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
+      POLYBOT_TOKEN: ${{ secrets.POLYBOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps (paper mode)
+        run: pip install requests python-dotenv
+
+      - name: Arbitrage scan
+        run: python -m polybot arbitrage
+      - name: Market discovery
+        run: python -m polybot scan
+      - name: Copytrade (1 pass)
+        run: python -m polybot copytrade
+      - name: Evaluate hasil
+        run: python -m polybot evaluate
+
+      - name: Persist riwayat.csv
+        run: |
+          git config user.name "polybot-ci"
+          git config user.email "polybot-ci@users.noreply.github.com"
+          git add -f data/riwayat.csv 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update riwayat [skip ci]"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push || true
+          else
+            echo "riwayat tidak berubah."
+          fi

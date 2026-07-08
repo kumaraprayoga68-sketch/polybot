@@ -1,0 +1,8 @@
+.env
+# riwayat.csv sengaja DI-TRACK (dipakai CI 24/7 buat persist state), sisanya di-ignore
+data/*
+!data/riwayat.csv
+__pycache__/
+*.pyc
+.venv/
+serviceAccountKey.json
