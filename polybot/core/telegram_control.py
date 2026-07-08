@@ -145,6 +145,7 @@ HELP = (
     "/paper — balik ke simulasi (aman)\n"
     "/window [1d|7d|30d|all] — window leaderboard copy-trade\n"
     "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
+    "/kelly [on|off] — sizing Kelly (off = flat, gak penakut)\n"
     "/ping — cek bot hidup"
 )
 
@@ -259,6 +260,26 @@ def _cmd_agresif(arg):
         send("✅ <b>Mode agresif OFF</b> — balik ke logika selektif (skor + Kelly + consensus).")
 
 
+def _cmd_kelly(arg):
+    """Toggle Kelly sizing. Off = flat sizing (gak diciutin — Kelly kadang 'terlalu takut')."""
+    from ..config import CopyTrade
+    if arg not in ("on", "off"):
+        status = "ON (berbasis edge)" if CopyTrade.KELLY_ENABLED else f"OFF (flat {CopyTrade.FLAT_FRAC}×)"
+        send(f"Kelly sizing: <b>{status}</b>\n"
+             f"On: /kelly on · Off (flat): /kelly off\n"
+             f"<i>Off = bet rata {CopyTrade.FLAT_FRAC}× MAX_PER_TRADE (${config.Common.MAX_PER_TRADE}), "
+             f"gak diciutin walau harga mahal.</i>")
+        return
+    CopyTrade.KELLY_ENABLED = (arg == "on")
+    if arg == "on":
+        send("✅ <b>Kelly ON</b> — size berbasis edge (ciut/skip kalau harga gak ngasih edge).")
+    else:
+        flat = round(config.Common.MAX_PER_TRADE * CopyTrade.FLAT_FRAC, 2)
+        send(f"🎯 <b>Kelly OFF</b> — flat sizing <b>${flat}</b>/bet (gak diciutin).\n"
+             f"<i>Catatan: tanpa Kelly, proteksi 'jangan bet kalau gak ada edge' hilang. "
+             f"Buat paper aman; di live lebih beresiko.</i>")
+
+
 def _handle(text):
     parts = text.strip().split()
     cmd = parts[0].lower().lstrip("/").split("@")[0]  # /cmd@botname -> cmd
@@ -298,6 +319,8 @@ def _handle(text):
         _cmd_window(arg)
     elif cmd in ("agresif", "aggressive"):
         _cmd_agresif(arg)
+    elif cmd == "kelly":
+        _cmd_kelly(arg)
     else:
         send(f"❓ Command tidak dikenal: /{html.escape(cmd)}\n{HELP}")
 
@@ -317,6 +340,7 @@ def _register_commands():
         {"command": "paper", "description": "balik ke simulasi (aman)"},
         {"command": "window", "description": "window leaderboard (1d/7d/30d/all)"},
         {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
+        {"command": "kelly", "description": "sizing Kelly on/off (off=flat)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},
     ]

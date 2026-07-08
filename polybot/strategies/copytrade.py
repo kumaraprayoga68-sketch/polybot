@@ -105,11 +105,14 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
         print(f"  ⏭️  SKIP {info['market'][:45]} — skor {skor} < {threshold}")
         return False
 
-    # sizing: Kelly berbasis edge; di paper agresif, kalau Kelly=0 pakai flat fallback
+    # sizing: Kelly (berbasis edge) ATAU flat (kalau Kelly di-off)
     wr = sum(performa[w]["win_rate"] for w in pendukung if w in performa) / max(1, len(pendukung))
-    frac = kelly.kelly_fraction(wr, harga)
-    if frac <= 0 and agresif:
-        frac = CopyTrade.AGG_FLAT_FRAC   # flat size (paper only) biar tetap ada bet
+    if CopyTrade.KELLY_ENABLED:
+        frac = kelly.kelly_fraction(wr, harga)
+        if frac <= 0 and agresif:
+            frac = CopyTrade.FLAT_FRAC   # paper agresif: flat fallback biar tetap ada bet
+    else:
+        frac = CopyTrade.FLAT_FRAC       # Kelly off -> flat sizing (gak diciutin)
     size = round(Common.MAX_PER_TRADE * frac, 2)
     if size <= 0:
         tracker.catat("copytrade", "skip_kelly", market=info["market"][:60], condition_id=cid,

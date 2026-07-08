@@ -81,8 +81,12 @@ class CopyTrade:
     # Cuma aktif kalau SIMULASI_MODE=True. Di live, otomatis balik selektif (aman).
     AGGRESSIVE          = _env_bool("COPYTRADE_AGGRESSIVE", False)
     AGG_MIN_WIN_RATE    = _env_float("AGG_MIN_WIN_RATE", 40.0)   # screening dilonggarin
-    AGG_FLAT_FRAC       = _env_float("AGG_FLAT_FRAC", 0.3)       # size fallback kalau Kelly=0
     AGG_MAX_BETS        = int(_env_float("AGG_MAX_BETS", 10))    # cap IKUT per siklus (anti-flood)
+    # --- Kelly sizing on/off ---
+    # True  = Kelly (size berbasis edge; ciut/skip kalau harga gak ngasih edge = "penakut")
+    # False = flat sizing (bet rata FLAT_FRAC * MAX_PER_TRADE, gak diciutin Kelly)
+    KELLY_ENABLED       = _env_bool("KELLY_ENABLED", True)
+    FLAT_FRAC           = _env_float("FLAT_FRAC", 0.5)           # fraksi flat size (0-1) saat Kelly off / fallback
 
 
 class Arbitrage:
