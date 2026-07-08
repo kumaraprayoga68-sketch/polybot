@@ -36,6 +36,7 @@ jobs:
       ARB_MAX_MARKET: "800"
       ARB_MIN_EDGE_PCT: "5"
       SCANNER_MIN_VOLUME: "50000"
+      AUTO_LOOP_MIN: "30"   # loop otomatis nyala pas boot & nyambung tiap restart (0=mati)
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}

@@ -404,6 +404,12 @@ def run():
     print(f"🤖 Telegram control aktif sebagai @{bot_name}. Kirim /help di chat kamu.")
     send("🤖 <b>polybot control ONLINE</b>\nKirim /help buat lihat command.")
 
+    # AUTO-LOOP: kalau di-set, mulai loop otomatis pas boot biar nyambung terus
+    # walau listener restart (mis. di GitHub Actions ~tiap 5,5 jam). Tanpa ini,
+    # loop selalu balik OFF tiap restart karena state-nya cuma di memori proses.
+    if config.AUTO_LOOP_MIN and config.AUTO_LOOP_MIN > 0:
+        _start_loop(max(5, config.AUTO_LOOP_MIN))
+
     while True:
         try:
             r = requests.get(_api("getUpdates"),

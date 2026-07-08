@@ -55,6 +55,11 @@ TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
 POLYBOT_DASHBOARD_URL = os.getenv("POLYBOT_DASHBOARD_URL", "")
 POLYBOT_TOKEN         = os.getenv("POLYBOT_TOKEN", "")
 
+# Auto-loop: kalau > 0, listener Telegram (`polybot telegram`) otomatis MULAI loop
+# hunt tiap N menit saat boot — biar loop nyambung terus walau listener restart
+# (state loop in-memory ilang tiap restart). 0 = mati (loop cuma via /loop manual).
+AUTO_LOOP_MIN = int(_env_float("AUTO_LOOP_MIN", 0))
+
 
 class Common:
     """Setting global lintas strategi."""
