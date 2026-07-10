@@ -104,8 +104,9 @@ def _run_copy():
 
 
 def _run_evaluate():
+    # scorecard resmi (baca sumber yang sama dengan dashboard) — bukan file lokal mesin ini
     from . import evaluate
-    evaluate.run()
+    evaluate.scorecard()
 
 
 def _run_hunt():

@@ -9,7 +9,63 @@ PnL paper untuk 1 bet directional (copytrade):
 Hasil dicatat sebagai baris aksi="hasil" (resolved/menang/pnl), di-dedup biar gak
 dobel, dan di-push ke dashboard + Telegram.
 """
+import os
+import io
+import csv as _csv
+
+import requests
+
 from . import resolver, tracker, notify, dashboard
+from .. import config
+
+
+def scorecard():
+    """
+    Scorecard RESMI — baca riwayat.csv dari GitHub (sumber yang sama dengan dashboard,
+    di-commit CI). Jadi angka /evaluate konsisten dengan dashboard, gak ketuker sama
+    file lokal tiap mesin. Fallback ke file lokal kalau fetch gagal.
+    """
+    txt, src = None, "GitHub (CI)"
+    try:
+        r = requests.get(config.POLYBOT_HISTORY_URL, timeout=10)
+        if r.ok:
+            txt = r.text
+    except Exception:
+        pass
+    if not txt:
+        path = os.path.join(config.Common.DATA_DIR, "riwayat.csv")
+        if os.path.exists(path):
+            txt = open(path, encoding="utf-8").read()
+            src = "lokal (fallback)"
+    if not txt:
+        print("📭 Belum ada data riwayat sama sekali.")
+        return
+
+    rows = list(_csv.DictReader(io.StringIO(txt)))
+    ikut = [r for r in rows if r.get("aksi") in ("ikut", "eksekusi")]
+    hasil = [r for r in rows if r.get("aksi") == "hasil"]
+    menang = sum(1 for r in hasil if r.get("menang") == "true")
+    kalah = sum(1 for r in hasil if r.get("menang") == "false")
+    done = {(r.get("condition_id"), r.get("outcome")) for r in hasil}
+    pending = [r for r in ikut if (r.get("condition_id"), r.get("outcome")) not in done]
+
+    def _f(r, k):
+        try:
+            return float(r.get(k) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    net = sum(_f(r, "pnl") for r in hasil)
+    exposure = sum(_f(r, "size_usd") for r in pending)
+    resolved = menang + kalah
+    wr = (menang / resolved * 100) if resolved else 0
+
+    print(f"📊 Scorecard polybot (sumber: {src})")
+    print(f"  Bet (ikut)      : {len(ikut)}")
+    print(f"  Resolved        : {resolved}  ({menang}W / {kalah}L, win rate {wr:.0f}%)")
+    print(f"  Pending         : {len(pending)}")
+    print(f"  Exposure paper  : ${exposure:.1f}")
+    print(f"  Net PnL (paper) : ${net:+.2f}")
+    print(f"  (angka ini sama dengan dashboard — evaluasi otomatis jalan tiap 30 menit di CI)")
 
 
 def _sudah_dievaluasi(rows, cid, outcome):

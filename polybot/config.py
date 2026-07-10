@@ -54,6 +54,13 @@ TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
 # dipantau live dari web. Kosongkan buat matiin (tetap ada CSV lokal + Telegram).
 POLYBOT_DASHBOARD_URL = os.getenv("POLYBOT_DASHBOARD_URL", "")
 
+# Sumber SCORECARD resmi = riwayat.csv yang di-commit CI ke GitHub (sama sumbernya
+# dengan dashboard). Dipakai /evaluate biar angka konsisten lintas Telegram+dashboard,
+# gak ketuker sama file lokal tiap mesin.
+POLYBOT_HISTORY_URL = os.getenv(
+    "POLYBOT_HISTORY_URL",
+    "https://raw.githubusercontent.com/kumaraprayoga68-sketch/polybot/main/data/riwayat.csv")
+
 # Auto-loop: kalau > 0, listener Telegram (`polybot telegram`) otomatis MULAI loop
 # hunt tiap N menit saat boot — biar loop nyambung terus walau listener restart
 # (state loop in-memory ilang tiap restart). 0 = mati (loop cuma via /loop manual).
