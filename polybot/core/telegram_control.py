@@ -159,17 +159,29 @@ def _run_kapan():
 
 
 def _status_text():
-    live = (not config.Common.SIMULASI_MODE) and config.LIVE_TRADING_ENABLED
     from ..config import CopyTrade, Arbitrage, Scanner
+    live = (not config.Common.SIMULASI_MODE) and config.LIVE_TRADING_ENABLED
     loop_on = _loop_thread is not None and _loop_thread.is_alive()
+    agresif = CopyTrade.AGGRESSIVE and config.Common.SIMULASI_MODE
+    flat = round(config.Common.MAX_PER_TRADE * CopyTrade.FLAT_FRAC, 2)
+    kelly_txt = "ON (berbasis edge)" if CopyTrade.KELLY_ENABLED else f"OFF · flat ${flat}"
     return (
-        f"<b>polybot status</b>\n"
+        f"<b>📟 polybot — status</b>\n"
         f"Mode: {'🔴 LIVE' if live else '🟢 PAPER (aman)'}\n"
         f"Loop otomatis: {'🔁 ON' if loop_on else '⏹️ OFF'}\n"
         f"Antrian job: {_job_q.qsize()}\n"
-        f"Strategi: copy={CopyTrade.ENABLED} arb={Arbitrage.ENABLED} scan={Scanner.ENABLED}\n"
-        f"Hard cap/order: ${config.MAX_ORDER_SIZE_ABSOLUTE} · budget ${config.Common.BUDGET}\n"
-        f"Dashboard: {'ON' if config.POLYBOT_DASHBOARD_URL else 'OFF'}"
+        f"\n"
+        f"<b>⚙️ Tuning copy-trade</b>\n"
+        f"• Agresif: {'🔥 ON' if agresif else 'OFF'}   <i>/agresif</i>\n"
+        f"• Kelly: {kelly_txt}   <i>/kelly</i>\n"
+        f"• Resolve: ≤ {CopyTrade.MAX_HARI_KE_RESOLVE} hari   <i>/resolve</i>\n"
+        f"• Leaderboard: {CopyTrade.LEADERBOARD_WINDOW}   <i>/window</i>\n"
+        f"• Skor minimal: {CopyTrade.SKOR_THRESHOLD}\n"
+        f"• Size/bet: maks ${config.Common.MAX_PER_TRADE}\n"
+        f"\n"
+        f"<b>🧩 Strategi</b>: copy={CopyTrade.ENABLED} · arb={Arbitrage.ENABLED} · scan={Scanner.ENABLED}\n"
+        f"<b>🔒 Hard cap/order</b>: ${config.MAX_ORDER_SIZE_ABSOLUTE} · budget ${config.Common.BUDGET}\n"
+        f"<b>📊 Dashboard</b>: {'ON' if config.POLYBOT_DASHBOARD_URL else 'OFF'}"
     )
 
 
