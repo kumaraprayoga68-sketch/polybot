@@ -31,7 +31,7 @@ jobs:
       KELLY_ENABLED: "false"         # mode berani: flat sizing, gak diciutin Kelly
       FLAT_FRAC: "0.5"
       MAX_HARI_KE_RESOLVE: "14"      # cuma bet market resolve <= 14 hari (feedback W/L cepet)
-      LEADERBOARD_WINDOW: "30d"
+      LEADERBOARD_WINDOW: "7d"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
