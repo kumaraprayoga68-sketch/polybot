@@ -1,0 +1,43 @@
+# Render Blueprint — deploy listener kontrol Telegram polybot 24/7 di cloud.
+#
+# DEFAULT: Background Worker (proses nyala terus) — ~$7/bulan, paling reliable.
+#
+# MAU GRATIS? Ganti blok di bawah jadi Web Service (free tier):
+#   - type: web
+#   - plan: free
+#   - tambah:  healthCheckPath: /
+#   Listener otomatis nyalain health server kalau env PORT ada (dari Render).
+#   ⚠️ Free web "tidur" setelah 15 menit idle -> bisa telat bales. Biar tetep
+#   bangun, pasang pinger tiap ~10 menit (mis. cron-job.org / UptimeRobot ke URL Render).
+#
+# SETELAH deploy: set 4 env var (Telegram + dashboard) di dashboard Render.
+services:
+  - type: worker
+    name: polybot-telegram
+    runtime: python
+    plan: starter          # worker minimum berbayar (~$7/bln). Ganti ke free HANYA kalau pakai type: web
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m polybot telegram
+    autoDeploy: true       # auto redeploy tiap push ke main
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false        # diisi manual di dashboard (rahasia)
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: POLYBOT_DASHBOARD_URL
+        sync: false
+      - key: POLYBOT_TOKEN
+        sync: false
+      # keamanan: paksa paper di cloud (gak ada wallet -> live mustahil)
+      - key: SIMULASI_MODE
+        value: "true"
+      - key: LIVE_TRADING_ENABLED
+        value: "false"
+      # mode berani buat ngumpulin data (sama kayak CI)
+      - key: COPYTRADE_AGGRESSIVE
+        value: "true"
+      - key: KELLY_ENABLED
+        value: "false"
+      - key: MAX_HARI_KE_RESOLVE
+        value: "14"

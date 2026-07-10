@@ -418,6 +418,37 @@ def _register_commands():
         pass
 
 
+def _start_health_server():
+    """
+    Kalau env PORT diset (mis. Render Web Service), nyalain HTTP health endpoint
+    di thread terpisah. Buat Render Background Worker, PORT gak ada -> di-skip.
+    """
+    import os
+    port = os.environ.get("PORT")
+    if not port:
+        return
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"polybot telegram control OK")
+
+        def log_message(self, *a):
+            pass  # jangan spam log
+
+    def serve():
+        try:
+            HTTPServer(("0.0.0.0", int(port)), H).serve_forever()
+        except Exception as e:
+            print(f"health server error: {e}")
+
+    threading.Thread(target=serve, daemon=True).start()
+    print(f"🩺 health server di port {port}")
+
+
 def run():
     """Mulai listener long-polling. Blocking; Ctrl+C buat stop."""
     global _CHAT
@@ -425,6 +456,7 @@ def run():
         print("❌ TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID belum diset di .env.")
         return
     _CHAT = str(config.TELEGRAM_CHAT_ID)
+    _start_health_server()
 
     # verifikasi token
     try:
