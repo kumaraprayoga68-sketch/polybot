@@ -29,7 +29,7 @@ jobs:
       # dan RESET ke paper tiap restart (~6 jam) — jadi live gak pernah "sticky".
       SIMULASI_MODE: "true"
       LIVE_TRADING_ENABLED: "false"
-      MAX_ORDER_SIZE_ABSOLUTE: "1"   # hard cap $1/order — gak bisa dilewati command apapun
+      MAX_ORDER_SIZE_ABSOLUTE: "5"   # default cap $5/order (bet normal $2.5 lolos). Atur/matiin via /cap
       COPYTRADE_AGGRESSIVE: "true"
       KELLY_ENABLED: "false"
       FLAT_FRAC: "0.5"

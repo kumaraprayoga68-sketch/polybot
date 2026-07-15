@@ -180,7 +180,7 @@ def _status_text():
         f"• Size/bet: maks ${config.Common.MAX_PER_TRADE}\n"
         f"\n"
         f"<b>🧩 Strategi</b>: copy={CopyTrade.ENABLED} · arb={Arbitrage.ENABLED} · scan={Scanner.ENABLED}\n"
-        f"<b>🔒 Hard cap/order</b>: ${config.MAX_ORDER_SIZE_ABSOLUTE} · budget ${config.Common.BUDGET}\n"
+        f"<b>🔒 Hard cap/order</b>: {'OFF' if config.MAX_ORDER_SIZE_ABSOLUTE>=1e11 else '$'+str(config.MAX_ORDER_SIZE_ABSOLUTE)} · budget ${config.Common.BUDGET}   <i>/cap</i>\n"
         f"<b>📊 Dashboard</b>: {'ON' if config.POLYBOT_DASHBOARD_URL else 'OFF'}"
     )
 
@@ -203,6 +203,7 @@ HELP = (
     "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
     "/kelly [on|off] — sizing Kelly (off = flat, gak penakut)\n"
     "/resolve [hari] — cuma copy market resolve ≤ N hari (feedback cepet)\n"
+    "/cap [n|off] — hard cap ukuran order (rem live)\n"
     "/ping — cek bot hidup"
 )
 
@@ -335,6 +336,30 @@ def _cmd_resolve(arg):
          f"resolve-nya lebih jauh dari itu (fokus jangka pendek).")
 
 
+def _cmd_cap(arg):
+    """Set / matiin hard cap ukuran order (rem terakhir di live)."""
+    cur = config.MAX_ORDER_SIZE_ABSOLUTE
+    if not arg:
+        txt = "❌ OFF (gak ada batas)" if cur >= 1e11 else f"${round(cur,2)}/order"
+        send(f"Hard cap: <b>{txt}</b>\n"
+             f"Set: /cap 5 · Matiin: /cap off · Nyalain: /cap 1\n"
+             f"<i>(order juga selalu dibatasi sizing, maks ${config.Common.MAX_PER_TRADE}/bet)</i>")
+        return
+    if arg == "off":
+        config.MAX_ORDER_SIZE_ABSOLUTE = 1e12
+        send("⚠️ <b>Hard cap OFF</b> — order gak dibatasi cap lagi.\n"
+             f"<i>Masih dibatasi sizing (maks ${config.Common.MAX_PER_TRADE}/bet), tapi di LIVE "
+             f"ini ngilangin rem terakhir. Restart bot = balik ke default.</i>")
+        return
+    try:
+        v = float(arg)
+    except ValueError:
+        send("Isi angka, mis. /cap 5  atau  /cap off")
+        return
+    config.MAX_ORDER_SIZE_ABSOLUTE = max(0.01, v)
+    send(f"✅ Hard cap di-set <b>${v}/order</b>.")
+
+
 def _cmd_kelly(arg):
     """Toggle Kelly sizing. Off = flat sizing (gak diciutin — Kelly kadang 'terlalu takut')."""
     from ..config import CopyTrade
@@ -398,6 +423,8 @@ def _handle(text):
         _cmd_agresif(arg)
     elif cmd == "kelly":
         _cmd_kelly(arg)
+    elif cmd == "cap":
+        _cmd_cap(arg)
     elif cmd == "resolve":
         _cmd_resolve(arg)
     else:
@@ -422,6 +449,7 @@ def _register_commands():
         {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
         {"command": "kelly", "description": "sizing Kelly on/off (off=flat)"},
         {"command": "resolve", "description": "copy market resolve <= N hari"},
+        {"command": "cap", "description": "hard cap order (n / off)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},
     ]
