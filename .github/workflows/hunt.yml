@@ -30,8 +30,9 @@ jobs:
       COPYTRADE_AGGRESSIVE: "true"   # paper: ikut bet biar ngumpulin data (aman, CI selalu paper)
       KELLY_ENABLED: "false"         # mode berani: flat sizing, gak diciutin Kelly
       FLAT_FRAC: "0.5"
-      MAX_HARI_KE_RESOLVE: "1"       # cuma bet market resolve <= 1 hari (feedback W/L super cepet)
+      MAX_HARI_KE_RESOLVE: "7"       # bet market resolve <= 7 hari (banyak market eligible)
       MAX_ENTRY_PRICE: "0.85"        # skip favorit (harga > 0.85), fokus market value
+      AGG_MAX_BETS: "25"             # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       LEADERBOARD_WINDOW: "7d"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

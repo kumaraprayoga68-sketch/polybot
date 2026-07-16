@@ -33,8 +33,9 @@ jobs:
       COPYTRADE_AGGRESSIVE: "true"
       KELLY_ENABLED: "false"
       FLAT_FRAC: "0.5"
-      MAX_HARI_KE_RESOLVE: "1"
+      MAX_HARI_KE_RESOLVE: "7"    # bet market resolve <= 7 hari (banyak market eligible)
       MAX_ENTRY_PRICE: "0.85"     # skip favorit (harga > 0.85), fokus market value
+      AGG_MAX_BETS: "25"          # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       LEADERBOARD_WINDOW: "7d"
       ARB_MAX_MARKET: "800"
       ARB_MIN_EDGE_PCT: "5"
