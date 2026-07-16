@@ -175,6 +175,7 @@ def _status_text():
         f"• Agresif: {'🔥 ON' if agresif else 'OFF'}   <i>/agresif</i>\n"
         f"• Kelly: {kelly_txt}   <i>/kelly</i>\n"
         f"• Resolve: ≤ {CopyTrade.MAX_HARI_KE_RESOLVE} hari   <i>/resolve</i>\n"
+        f"• Max harga: {'OFF' if CopyTrade.MAX_ENTRY_PRICE>=1 else '≤ $'+str(CopyTrade.MAX_ENTRY_PRICE)}   <i>/maxprice</i>\n"
         f"• Leaderboard: {CopyTrade.LEADERBOARD_WINDOW}   <i>/window</i>\n"
         f"• Skor minimal: {CopyTrade.SKOR_THRESHOLD}\n"
         f"• Size/bet: maks ${config.Common.MAX_PER_TRADE}\n"
@@ -203,6 +204,7 @@ HELP = (
     "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
     "/kelly [on|off] — sizing Kelly (off = flat, gak penakut)\n"
     "/resolve [hari] — cuma copy market resolve ≤ N hari (feedback cepet)\n"
+    "/maxprice [n|off] — skip favorit (harga > n) biar gak untung recehan\n"
     "/cap [n|off] — hard cap ukuran order (rem live)\n"
     "/ping — cek bot hidup"
 )
@@ -336,6 +338,30 @@ def _cmd_resolve(arg):
          f"resolve-nya lebih jauh dari itu (fokus jangka pendek).")
 
 
+def _cmd_maxprice(arg):
+    """Set batas harga entry — skip bet favorit (harga kemahalan = untung recehan)."""
+    from ..config import CopyTrade
+    if not arg:
+        cur = CopyTrade.MAX_ENTRY_PRICE
+        txt = "OFF (bet semua harga)" if cur >= 1 else f"≤ ${cur} (skip favorit di atas ini)"
+        send(f"Max harga entry: <b>{txt}</b>\n"
+             f"Set: /maxprice 0.8 · Matiin: /maxprice off\n"
+             f"<i>Makin rendah = makin cuma bet market 'value', skip favorit recehan.</i>")
+        return
+    if arg == "off":
+        CopyTrade.MAX_ENTRY_PRICE = 1.0
+        send("⚠️ Filter harga OFF — bot bet semua harga (termasuk favorit recehan).")
+        return
+    try:
+        v = float(arg)
+    except ValueError:
+        send("Isi angka 0-1, mis. /maxprice 0.8  atau  /maxprice off")
+        return
+    CopyTrade.MAX_ENTRY_PRICE = max(0.05, min(1.0, v))
+    send(f"✅ Max harga entry di-set <b>≤ ${CopyTrade.MAX_ENTRY_PRICE}</b>.\n"
+         f"Bot bakal skip bet dengan harga di atas itu (favorit) — fokus market value.")
+
+
 def _cmd_cap(arg):
     """Set / matiin hard cap ukuran order (rem terakhir di live)."""
     cur = config.MAX_ORDER_SIZE_ABSOLUTE
@@ -425,6 +451,8 @@ def _handle(text):
         _cmd_kelly(arg)
     elif cmd == "cap":
         _cmd_cap(arg)
+    elif cmd in ("maxprice", "harga"):
+        _cmd_maxprice(arg)
     elif cmd == "resolve":
         _cmd_resolve(arg)
     else:
@@ -449,6 +477,7 @@ def _register_commands():
         {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
         {"command": "kelly", "description": "sizing Kelly on/off (off=flat)"},
         {"command": "resolve", "description": "copy market resolve <= N hari"},
+        {"command": "maxprice", "description": "skip favorit (harga > n)"},
         {"command": "cap", "description": "hard cap order (n / off)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},

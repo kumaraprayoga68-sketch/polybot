@@ -98,6 +98,9 @@ class CopyTrade:
     # False = flat sizing (bet rata FLAT_FRAC * MAX_PER_TRADE, gak diciutin Kelly)
     KELLY_ENABLED       = _env_bool("KELLY_ENABLED", True)
     FLAT_FRAC           = _env_float("FLAT_FRAC", 0.5)           # fraksi flat size (0-1) saat Kelly off / fallback
+    # Skip bet FAVORIT: kalau harga outcome > ini, gak di-bet (untung recehan, rugi penuh).
+    # 1.0 = filter mati (bet semua harga). 0.85 = cuma bet market "value".
+    MAX_ENTRY_PRICE     = _env_float("MAX_ENTRY_PRICE", 0.85)
 
 
 class Arbitrage:
