@@ -37,7 +37,7 @@ jobs:
       MAX_ENTRY_PRICE: "0.85"     # skip favorit (harga > 0.85)
       MIN_ENTRY_PRICE: "0.15"     # skip longshot (harga < 0.15, tiket lotre)
       AGG_MAX_BETS: "25"          # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
-      LEADERBOARD_WINDOW: "7d"
+      LEADERBOARD_WINDOW: "30d"   # pilih trader by profit 30 hari (skill > hoki mingguan)
       ARB_MAX_MARKET: "800"
       ARB_MIN_EDGE_PCT: "5"
       SCANNER_MIN_VOLUME: "50000"
