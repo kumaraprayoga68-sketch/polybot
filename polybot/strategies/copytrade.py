@@ -97,16 +97,24 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
     if tracker.sudah_dievaluasi(cid, outcome):
         return False
 
-    # filter harga: skip FAVORIT (harga kemahalan → untung recehan, rugi penuh).
-    # MAX_ENTRY_PRICE >= 1 = filter mati.
+    # filter harga: bet cuma di BAND "value" [MIN, MAX].
+    #  - di atas MAX = FAVORIT (untung recehan, rugi penuh).
+    #  - di bawah MIN = LONGSHOT (tiket lotre, hampir pasti kalah).
+    # MAX_ENTRY_PRICE >= 1 dan MIN_ENTRY_PRICE <= 0 = filter mati.
     harga = info.get("harga")
-    if (harga is not None and CopyTrade.MAX_ENTRY_PRICE < 1
-            and harga > CopyTrade.MAX_ENTRY_PRICE):
-        tracker.catat("copytrade", "skip_harga", market=info["market"][:60], condition_id=cid,
-                      outcome=outcome, harga=harga, end_date=info.get("end_date", ""),
-                      keterangan=f"harga {harga} > maxprice {CopyTrade.MAX_ENTRY_PRICE} (favorit)")
-        print(f"  ⏭️  SKIP(harga) {info['market'][:42]} — ${harga} > {CopyTrade.MAX_ENTRY_PRICE} (favorit recehan)")
-        return False
+    if harga is not None:
+        if CopyTrade.MAX_ENTRY_PRICE < 1 and harga > CopyTrade.MAX_ENTRY_PRICE:
+            tracker.catat("copytrade", "skip_harga", market=info["market"][:60], condition_id=cid,
+                          outcome=outcome, harga=harga, end_date=info.get("end_date", ""),
+                          keterangan=f"harga {harga} > maxprice {CopyTrade.MAX_ENTRY_PRICE} (favorit)")
+            print(f"  ⏭️  SKIP(harga) {info['market'][:42]} — ${harga} > {CopyTrade.MAX_ENTRY_PRICE} (favorit recehan)")
+            return False
+        if CopyTrade.MIN_ENTRY_PRICE > 0 and harga < CopyTrade.MIN_ENTRY_PRICE:
+            tracker.catat("copytrade", "skip_harga", market=info["market"][:60], condition_id=cid,
+                          outcome=outcome, harga=harga, end_date=info.get("end_date", ""),
+                          keterangan=f"harga {harga} < minprice {CopyTrade.MIN_ENTRY_PRICE} (longshot)")
+            print(f"  ⏭️  SKIP(harga) {info['market'][:42]} — ${harga} < {CopyTrade.MIN_ENTRY_PRICE} (longshot lotre)")
+            return False
 
     agresif = _agresif()
 

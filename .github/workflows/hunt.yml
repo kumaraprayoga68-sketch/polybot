@@ -31,7 +31,8 @@ jobs:
       KELLY_ENABLED: "false"         # mode berani: flat sizing, gak diciutin Kelly
       FLAT_FRAC: "0.5"
       MAX_HARI_KE_RESOLVE: "7"       # bet market resolve <= 7 hari (banyak market eligible)
-      MAX_ENTRY_PRICE: "0.85"        # skip favorit (harga > 0.85), fokus market value
+      MAX_ENTRY_PRICE: "0.85"        # skip favorit (harga > 0.85)
+      MIN_ENTRY_PRICE: "0.15"        # skip longshot (harga < 0.15, tiket lotre)
       AGG_MAX_BETS: "25"             # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       LEADERBOARD_WINDOW: "7d"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

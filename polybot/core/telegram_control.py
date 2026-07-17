@@ -176,6 +176,7 @@ def _status_text():
         f"• Kelly: {kelly_txt}   <i>/kelly</i>\n"
         f"• Resolve: ≤ {CopyTrade.MAX_HARI_KE_RESOLVE} hari   <i>/resolve</i>\n"
         f"• Max harga: {'OFF' if CopyTrade.MAX_ENTRY_PRICE>=1 else '≤ $'+str(CopyTrade.MAX_ENTRY_PRICE)}   <i>/maxprice</i>\n"
+        f"• Min harga: {'OFF' if CopyTrade.MIN_ENTRY_PRICE<=0 else '≥ $'+str(CopyTrade.MIN_ENTRY_PRICE)}   <i>/minprice</i>\n"
         f"• Leaderboard: {CopyTrade.LEADERBOARD_WINDOW}   <i>/window</i>\n"
         f"• Skor minimal: {CopyTrade.SKOR_THRESHOLD}\n"
         f"• Size/bet: maks ${config.Common.MAX_PER_TRADE}\n"
@@ -205,6 +206,7 @@ HELP = (
     "/kelly [on|off] — sizing Kelly (off = flat, gak penakut)\n"
     "/resolve [hari] — cuma copy market resolve ≤ N hari (feedback cepet)\n"
     "/maxprice [n|off] — skip favorit (harga > n) biar gak untung recehan\n"
+    "/minprice [n|off] — skip longshot (harga < n) biar gak beli tiket lotre\n"
     "/cap [n|off] — hard cap ukuran order (rem live)\n"
     "/ping — cek bot hidup"
 )
@@ -362,6 +364,30 @@ def _cmd_maxprice(arg):
          f"Bot bakal skip bet dengan harga di atas itu (favorit) — fokus market value.")
 
 
+def _cmd_minprice(arg):
+    """Set lantai harga entry — skip bet LONGSHOT (harga receh = tiket lotre, hampir pasti kalah)."""
+    from ..config import CopyTrade
+    if not arg:
+        cur = CopyTrade.MIN_ENTRY_PRICE
+        txt = "OFF (bet semua harga)" if cur <= 0 else f"≥ ${cur} (skip longshot di bawah ini)"
+        send(f"Min harga entry: <b>{txt}</b>\n"
+             f"Set: /minprice 0.15 · Matiin: /minprice off\n"
+             f"<i>Makin tinggi = makin skip longshot receh (peluang menang kecil).</i>")
+        return
+    if arg == "off":
+        CopyTrade.MIN_ENTRY_PRICE = 0.0
+        send("⚠️ Filter longshot OFF — bot bet semua harga (termasuk longshot recehan $0.0005).")
+        return
+    try:
+        v = float(arg)
+    except ValueError:
+        send("Isi angka 0-1, mis. /minprice 0.15  atau  /minprice off")
+        return
+    CopyTrade.MIN_ENTRY_PRICE = max(0.0, min(0.9, v))
+    send(f"✅ Min harga entry di-set <b>≥ ${CopyTrade.MIN_ENTRY_PRICE}</b>.\n"
+         f"Bot bakal skip bet dengan harga di bawah itu (longshot lotre) — fokus market value.")
+
+
 def _cmd_cap(arg):
     """Set / matiin hard cap ukuran order (rem terakhir di live)."""
     cur = config.MAX_ORDER_SIZE_ABSOLUTE
@@ -453,6 +479,8 @@ def _handle(text):
         _cmd_cap(arg)
     elif cmd in ("maxprice", "harga"):
         _cmd_maxprice(arg)
+    elif cmd in ("minprice", "longshot"):
+        _cmd_minprice(arg)
     elif cmd == "resolve":
         _cmd_resolve(arg)
     else:
@@ -478,6 +506,7 @@ def _register_commands():
         {"command": "kelly", "description": "sizing Kelly on/off (off=flat)"},
         {"command": "resolve", "description": "copy market resolve <= N hari"},
         {"command": "maxprice", "description": "skip favorit (harga > n)"},
+        {"command": "minprice", "description": "skip longshot (harga < n)"},
         {"command": "cap", "description": "hard cap order (n / off)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},
