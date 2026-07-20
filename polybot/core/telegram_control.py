@@ -20,6 +20,7 @@ KEAMANAN: cuma merespons pesan dari TELEGRAM_CHAT_ID yang dikonfigurasi. Chat la
 diabaikan total. Live trading tetap TIDAK bisa dari sini (butuh gate lokal + wallet).
 """
 import io
+import os
 import html
 import time
 import queue
@@ -64,6 +65,39 @@ def _pre(s):
     return "<pre>" + html.escape(s) + "</pre>"
 
 
+def _persist_riwayat():
+    """Commit riwayat.csv balik ke repo.
+
+    Tanpa ini, semua data yang ditulis listener ILANG tiap workflow restart
+    (~5j40m) karena runner selalu checkout ulang dari git. Listener hunting tiap
+    30 menit, jadi ini yang bikin datanya kesimpen — bukan nunggu hunt.yml.
+
+    Sengaja DIEM: kegagalan git gak boleh matiin loop, dan gak usah spam Telegram.
+    """
+    if not os.getenv("GITHUB_ACTIONS"):
+        return                      # cuma relevan di CI, gak ganggu run lokal
+    import subprocess
+
+    def git(*args, t=120):
+        return subprocess.run(("git",) + args, capture_output=True, text=True, timeout=t)
+
+    try:
+        git("config", "user.name", "polybot-listener")
+        git("config", "user.email", "polybot-listener@users.noreply.github.com")
+        git("add", "-f", "data/riwayat.csv")
+        if git("diff", "--cached", "--quiet").returncode == 0:
+            return                  # gak ada perubahan, gak perlu commit
+        git("commit", "-m", "chore: update riwayat (listener) [skip ci]")
+        # rebase dulu biar nyambung kalau ada commit lain; kalau bentrok -> batalin,
+        # commit lokal tetep ada dan bakal dicoba lagi siklus berikutnya.
+        if git("pull", "--rebase", "--autostash", "origin", "main").returncode != 0:
+            git("rebase", "--abort")
+            return
+        git("push", "origin", "HEAD:main")
+    except Exception:
+        pass                        # apa pun yang salah, loop harus tetap jalan
+
+
 # ── job runner: semua command jalan sekuensial di 1 worker (hindari tabrakan API) ──
 def _job_worker():
     while True:
@@ -77,6 +111,8 @@ def _job_worker():
         except Exception as e:
             send(f"❌ <b>/{name}</b> error: {html.escape(str(e))}")
         finally:
+            # simpan hasil apa pun yang barusan ditulis (no-op kalau gak ada perubahan)
+            _persist_riwayat()
             _job_q.task_done()
 
 

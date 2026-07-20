@@ -5,8 +5,10 @@ name: polybot 24/7 (cari peluang + evaluasi)
 # lalu simpan riwayat.csv balik ke repo biar state (dedup + histori) persisten.
 # Semua hasil dikirim ke Telegram + dashboard Vercel.
 on:
-  schedule:
-    - cron: "*/30 * * * *"     # tiap 30 menit
+  # CRON DIMATIIN (2026-07-20). Sekarang listener telegram.yml yang hunting tiap 30
+  # menit DAN commit hasilnya — cron GitHub gak bisa diandelin (kenyataannya jalan
+  # tiap 3-9 jam, bukan 30 menit). Satu penulis CSV = nol risiko konflik git.
+  # Workflow ini disimpen sebagai CADANGAN MANUAL kalau listener lagi mati.
   workflow_dispatch: {}          # trigger manual dari tab Actions
 
 permissions:

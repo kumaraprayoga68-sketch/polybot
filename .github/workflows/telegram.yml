@@ -15,6 +15,7 @@ on:
 
 permissions:
   actions: write            # buat self re-dispatch (restart diri sendiri)
+  contents: write           # buat commit riwayat.csv balik (biar data gak ilang tiap restart)
 
 concurrency:
   group: polybot-telegram
