@@ -182,15 +182,21 @@ def satu_siklus(wallets, performa, state):
     # paper agresif: 1 trader udah cukup jadi sinyal (bukan butuh consensus 2)
     butuh = 1 if (CopyTrade.SINGLE_TRADER_MODE or _agresif()) else 2
     bet_count = 0
-    skip_jauh = 0
+    skip_jauh = skip_zombie = 0
     for (cid, outcome), data in holders.items():
         pendukung = data["pendukung"]
         if len(pendukung) < butuh:
             continue
-        # filter resolve: skip market yang resolve-nya lebih dari MAX_HARI_KE_RESOLVE
+        # filter resolve = BAND [0, MAX_HARI_KE_RESOLVE]:
+        #  - hari > MAX  -> resolve kejauhan (feedback lama), skip
+        #  - hari < 0    -> tanggalnya UDAH LEWAT tapi belum settle = market "zombie".
+        #    Ngikutin ini nambah backlog yang gak resolve-resolve. Skip.
         hari = _hari_ke_resolve(data["info"].get("end_date"))
         if hari is not None and hari > CopyTrade.MAX_HARI_KE_RESOLVE:
             skip_jauh += 1
+            continue
+        if hari is not None and hari < 0:
+            skip_zombie += 1
             continue
         if _evaluasi_sinyal(cid, outcome, data["info"], pendukung, performa):
             bet_count += 1
@@ -201,6 +207,8 @@ def satu_siklus(wallets, performa, state):
 
     if skip_jauh:
         print(f"  ⏭️  {skip_jauh} market di-skip (resolve > {CopyTrade.MAX_HARI_KE_RESOLVE} hari).")
+    if skip_zombie:
+        print(f"  🧟 {skip_zombie} market di-skip (tanggal udah lewat, belum settle = zombie).")
     state["last"] = posisi_sekarang
 
 
