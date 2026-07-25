@@ -39,7 +39,8 @@ jobs:
       LEADERBOARD_WINDOW: "30d"   # pilih trader by profit 30 hari (skill > hoki mingguan)
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
+      # POLYBOT_DASHBOARD_URL dimatiin — dashboard baca riwayat.csv langsung dari GitHub.
+      # POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

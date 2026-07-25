@@ -12,11 +12,34 @@ dobel, dan di-push ke dashboard + Telegram.
 import os
 import io
 import csv as _csv
+from datetime import datetime, timezone
 
 import requests
 
 from . import resolver, tracker, notify, dashboard
 from .. import config
+
+# Anti-choke: evaluate dulu ngecek SEMUA bet belum-resolve tiap siklus (bisa 2000+),
+# tiap satu = 1 panggilan CLOB -> kena rate-limit/timeout -> nol resolusi. Sekarang
+# dibatasi & diprioritas biar resolusi segar selalu keproses.
+# CLOB gak nge-rate-limit (kebukti 50 call back-to-back sukses semua), cuma lambat
+# ~354ms/call. Jadi cap-nya TINGGI (cuma buat jaga runaway) — biar backlog kekejar
+# semua tiap siklus. 1600 call ≈ 9 menit, muat di loop 30 menit; sekali backlog
+# kelar, kandidat anjlok jadi ratusan (yg udah resolve keluar antrian) = 2-3 menit.
+_MAX_CEK_PER_SIKLUS = 2000  # safety valve anti-runaway, bukan penyekik
+_ZOMBIE_HARI = 14           # end_date lewat > ini & masih open = zombie, berhenti dicek
+
+
+def _hari_lewat(end_date):
+    """Berapa hari end_date SUDAH lewat dari sekarang. None kalau gak kebaca.
+    >0 = udah berakhir (kandidat resolve). <0 = masih ke depan (belum waktunya)."""
+    if not end_date:
+        return None
+    try:
+        d = datetime.strptime(str(end_date)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+    return (datetime.now(timezone.utc).date() - d).days
 
 
 def scorecard():
@@ -105,12 +128,42 @@ def run():
         print("✅ Gak ada posisi baru yang perlu dievaluasi (semua sudah / belum ada IKUT).")
         return
 
-    print(f"🔎 Evaluasi {len(kandidat)} posisi…")
+    # Prioritas biar evaluate gak keok kalau kandidat menumpuk:
+    #  - end_date masih KE DEPAN  -> mustahil udah resolve, skip (hemat panggilan)
+    #  - end_date lewat > ZOMBIE  -> market zombie, gak resolve2, skip
+    #  - end_date kosong          -> gak tau, tetep cek (taro paling belakang)
+    # Sisanya urut PALING BARU BERAKHIR DULU -> resolusi segar selalu keproses
+    # walau kena cap per siklus.
+    layak = []
+    for r in kandidat:
+        hl = _hari_lewat(r.get("end_date"))
+        if hl is None:
+            layak.append((r, None))          # end_date gak kebaca -> cek belakangan
+        elif hl < 0:
+            continue                         # belum waktunya (mustahil udah resolve)
+        elif hl > _ZOMBIE_HARI:
+            continue                         # zombie, buang
+        else:
+            layak.append((r, hl))            # 0 = baru berakhir hari ini
+    # Urut: yang PALING BARU berakhir duluan. Data nunjukin bet umur 0-4 hari ~95-100%
+    # udah resolve (event olahraga settle cepet), sedangkan yg 5-14 hari malah 0%
+    # (macet/zombie). Jadi newest-first = tiap panggilan API paling "berbuah".
+    # end_date gak kebaca ditaro paling belakang.
+    layak.sort(key=lambda x: (x[1] is None, x[1] if x[1] is not None else 0))
+    antri = [r for r, _ in layak][:_MAX_CEK_PER_SIKLUS]
+    sisa = len(layak) - len(antri)
+
+    if not antri:
+        print(f"✅ {len(kandidat)} belum resolve, tapi semua masih ke depan / zombie — gak ada yg dicek.")
+        return
+
+    print(f"🔎 {len(kandidat)} belum resolve · cek {len(antri)} paling mungkin resolve"
+          + (f" (sisa {sisa} siklus berikut)" if sisa else "") + "…")
     menang_total = kalah_total = belum = 0
     net = 0.0
     seen = set()
 
-    for r in kandidat:
+    for r in antri:
         cid, outcome = r["condition_id"], r["outcome"]
         if (cid, outcome) in seen:
             continue
