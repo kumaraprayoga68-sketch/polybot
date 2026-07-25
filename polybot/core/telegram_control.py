@@ -140,8 +140,12 @@ def _run_copy():
 
 
 def _run_evaluate():
-    # scorecard resmi (baca sumber yang sama dengan dashboard) — bukan file lokal mesin ini
     from . import evaluate
+    # WAJIB run() dulu: INI yang beneran nge-resolve bet (cek_status + tulis "hasil").
+    # BUG lama: cuma manggil scorecard() (yg cuma LAPOR, gak resolve) -> resolusi
+    # mandek total sejak listener ambil alih 20 Juli. run() = resolusi, scorecard = report.
+    evaluate.run()
+    # scorecard resmi (baca sumber yang sama dengan dashboard) buat report Telegram
     evaluate.scorecard()
 
 
