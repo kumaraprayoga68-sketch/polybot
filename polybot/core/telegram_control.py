@@ -84,7 +84,11 @@ def _persist_riwayat():
     try:
         git("config", "user.name", "polybot-listener")
         git("config", "user.email", "polybot-listener@users.noreply.github.com")
+        # riwayat + prefs trader (/trader). Prefs WAJIB ikut ke-commit, kalau engga
+        # pilihan/blokir trader ilang tiap listener restart (~5j40m).
         git("add", "-f", "data/riwayat.csv")
+        if os.path.exists("data/trader_prefs.json"):
+            git("add", "-f", "data/trader_prefs.json")
         if git("diff", "--cached", "--quiet").returncode == 0:
             return                  # gak ada perubahan, gak perlu commit
         git("commit", "-m", "chore: update riwayat (listener) [skip ci]")
@@ -247,6 +251,7 @@ HELP = (
     "/resolve [hari] — cuma copy market resolve ≤ N hari (feedback cepet)\n"
     "/maxprice [n|off] — skip favorit (harga > n) biar gak untung recehan\n"
     "/minprice [n|off] — skip longshot (harga < n) biar gak beli tiket lotre\n"
+    "/trader [block|unblock|only|auto] — pilih/buang trader yang di-copy\n"
     "/cap [n|off] — hard cap ukuran order (rem live)\n"
     "/ping — cek bot hidup"
 )
@@ -404,6 +409,96 @@ def _cmd_maxprice(arg):
          f"Bot bakal skip bet dengan harga di atas itu (favorit) — fokus market value.")
 
 
+def _wallet_dikenal():
+    """Wallet yang pernah muncul di riwayat — buat cocokin alamat pendek."""
+    from . import tracker
+    out = set()
+    try:
+        for r in tracker.baca_semua():
+            for w in (r.get("trader") or "").split("|"):
+                if w.strip():
+                    out.add(w.strip().lower())
+    except Exception:
+        pass
+    return out
+
+
+def _cmd_trader(arg):
+    """Pilih/buang trader yang di-copy. Persisten (gak ilang pas listener restart)."""
+    from . import trader_prefs
+    p = trader_prefs.baca()
+    parts = (arg or "").split()
+    sub = parts[0].lower() if parts else ""
+    args = parts[1:]
+
+    def ringkas(w):
+        return f"<code>{html.escape(w[:6])}…{html.escape(w[-4:])}</code>"
+
+    # ── tanpa argumen: tampilkan status
+    if not sub:
+        mode = "MANUAL (cuma trader pilihan)" if p["mode"] == "manual" and p["manual"] else "AUTO (ikut leaderboard)"
+        txt = f"👥 <b>Pemilihan trader</b>\nMode: <b>{mode}</b>\n"
+        if p["manual"]:
+            txt += "\nDipilih manual:\n" + "\n".join("  • " + ringkas(w) for w in p["manual"]) + "\n"
+        if p["block"]:
+            txt += "\n🚫 Diblokir:\n" + "\n".join("  • " + ringkas(w) for w in p["block"]) + "\n"
+        if not p["manual"] and not p["block"]:
+            txt += "\n<i>Belum ada pilihan/blokir — bot ikut leaderboard apa adanya.</i>\n"
+        txt += ("\n<b>Perintah:</b>\n"
+                "/trader block 0xABC… — buang trader (tetap mode auto)\n"
+                "/trader unblock 0xABC… — batalin blokir\n"
+                "/trader only 0xA 0xB — cuma copy trader ini\n"
+                "/trader auto — balik ikut leaderboard\n"
+                "<i>Alamat boleh disingkat (min 6 char) kalau udah pernah kecatat.</i>")
+        send(txt)
+        return
+
+    if sub == "auto":
+        p["mode"] = "auto"
+        p["manual"] = []
+        trader_prefs.tulis(p)
+        sisa = f" Blokir ({len(p['block'])}) tetap jalan." if p["block"] else ""
+        send(f"✅ Mode <b>AUTO</b> — bot balik ikut hasil leaderboard.{sisa}")
+        return
+
+    if sub in ("block", "unblock", "only"):
+        if not args:
+            send(f"Butuh alamat wallet. Contoh: <code>/trader {sub} 0x204f…</code>")
+            return
+        kandidat = _wallet_dikenal()
+        resolved, gagal = [], []
+        for a in args:
+            w, err = trader_prefs.cocokkan(a, kandidat)
+            (resolved.append(w) if w else gagal.append(f"{html.escape(a)} — {html.escape(err)}"))
+        if gagal:
+            send("⚠️ Gagal:\n" + "\n".join("  • " + g for g in gagal))
+            if not resolved:
+                return
+
+        if sub == "block":
+            for w in resolved:
+                if w not in p["block"]:
+                    p["block"].append(w)
+            trader_prefs.tulis(p)
+            send(f"🚫 Diblokir: {', '.join(ringkas(w) for w in resolved)}\n"
+                 f"Total blokir: {len(p['block'])}. Berlaku mulai siklus hunt berikutnya.")
+        elif sub == "unblock":
+            p["block"] = [w for w in p["block"] if w not in resolved]
+            trader_prefs.tulis(p)
+            send(f"✅ Blokir dibatalin: {', '.join(ringkas(w) for w in resolved)}\n"
+                 f"Sisa blokir: {len(p['block'])}.")
+        else:  # only
+            p["mode"] = "manual"
+            p["manual"] = resolved
+            trader_prefs.tulis(p)
+            send(f"👤 Mode <b>MANUAL</b> — cuma copy:\n"
+                 + "\n".join("  • " + ringkas(w) for w in resolved)
+                 + "\n\n<i>Balik normal: /trader auto</i>")
+        return
+
+    send("Sub-perintah gak dikenal. Pakai: /trader · block · unblock · only · auto")
+
+
 def _cmd_minprice(arg):
     """Set lantai harga entry — skip bet LONGSHOT (harga receh = tiket lotre, hampir pasti kalah)."""
     from ..config import CopyTrade
@@ -519,6 +614,8 @@ def _handle(text):
         _cmd_cap(arg)
     elif cmd in ("maxprice", "harga"):
         _cmd_maxprice(arg)
+    elif cmd in ("trader", "traders"):
+        _cmd_trader(arg)
     elif cmd in ("minprice", "longshot"):
         _cmd_minprice(arg)
     elif cmd == "resolve":
@@ -547,6 +644,7 @@ def _register_commands():
         {"command": "resolve", "description": "copy market resolve <= N hari"},
         {"command": "maxprice", "description": "skip favorit (harga > n)"},
         {"command": "minprice", "description": "skip longshot (harga < n)"},
+        {"command": "trader", "description": "pilih/buang trader yg di-copy"},
         {"command": "cap", "description": "hard cap order (n / off)"},
         {"command": "ping", "description": "cek bot hidup"},
         {"command": "help", "description": "daftar command"},

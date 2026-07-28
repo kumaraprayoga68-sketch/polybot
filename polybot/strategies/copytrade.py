@@ -13,7 +13,7 @@ Pipeline:
 import time
 from datetime import datetime, timezone
 
-from ..core import api, executor, scoring, kelly, tracker, notify, trader_pnl
+from ..core import api, executor, scoring, kelly, tracker, notify, trader_pnl, trader_prefs
 from ..config import CopyTrade, Common
 
 
@@ -46,6 +46,16 @@ def pilih_trader():
             if addr:
                 kandidat.append(addr)
         wallets = kandidat[:20] or CopyTrade.DAFTAR_TRADER_MANUAL
+
+    # preferensi user dari Telegram (/trader): mode manual + blocklist. Persisten,
+    # jadi gak ilang tiap listener restart.
+    sebelum = len(wallets)
+    wallets = trader_prefs.terapkan(wallets)
+    p = trader_prefs.baca()
+    if p["mode"] == "manual" and p["manual"]:
+        print(f"👤 mode MANUAL: cuma copy {len(p['manual'])} trader pilihan.")
+    if p["block"]:
+        print(f"🚫 blocklist: {sebelum - len(wallets)} trader dibuang ({len(p['block'])} di daftar blok).")
 
     # paper agresif: screening dilonggarin biar cukup trader lolos (ada bahan buat bet)
     if _agresif():
