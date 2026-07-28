@@ -157,6 +157,7 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
     tracker.catat("copytrade", "ikut", market=info["market"][:60], condition_id=cid,
                   outcome=outcome, harga=harga, size_usd=size, skor=skor,
                   end_date=info.get("end_date", ""),
+                  trader="|".join(pendukung),   # simpen wallet yg di-copy -> buat win-rate per trader
                   keterangan=f"{len(pendukung)} trader · {hasil['status']}{tag}")
     print(f"  ✅ IKUT {info['market'][:45]} '{outcome}' ${size} (skor {skor}, {hasil['status']}){tag}")
     notify.alert_sinyal("✅ Copy-trade signal" + tag, [

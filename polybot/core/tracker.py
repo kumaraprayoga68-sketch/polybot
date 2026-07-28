@@ -15,6 +15,7 @@ FIELDS = [
     "timestamp", "strategi", "mode", "aksi", "market", "condition_id",
     "outcome", "harga", "size_usd", "skor", "edge_pct", "keterangan",
     "end_date", "resolved", "menang", "pnl",
+    "trader",   # wallet(s) trader yg di-copy (pipe-separated kalau consensus). Baru: kosong buat baris lama.
 ]
 
 

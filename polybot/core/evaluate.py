@@ -185,6 +185,7 @@ def run():
         tracker.catat("copytrade", "hasil", market=r.get("market", "")[:60],
                       condition_id=cid, outcome=outcome, harga=r.get("harga"),
                       size_usd=r.get("size_usd"), skor=r.get("skor"),
+                      trader=r.get("trader", ""),   # bawa wallet dari baris ikut -> win-rate per trader
                       resolved="true", menang="true" if menang else "false", pnl=pnl,
                       keterangan=("MENANG" if menang else "KALAH"))
         emoji = "🟢" if menang else "🔴"
