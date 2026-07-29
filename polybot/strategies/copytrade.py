@@ -45,7 +45,11 @@ def pilih_trader():
             addr = row.get("proxyWallet") or row.get("wallet") or row.get("address") or row.get("user")
             if addr:
                 kandidat.append(addr)
-        wallets = kandidat[:20] or CopyTrade.DAFTAR_TRADER_MANUAL
+        # Screening 50 (bukan 20): trader win-rate tinggi di puncak leaderboard banyak
+        # yang jangka-panjang/nganggur — posisinya kebuang filter resolve. Yang lebih
+        # dalam justru ada yang main market pendek (kepake). Pool lebar + TOP_N besar
+        # = ada trader lain buat dibandingin, bukan cuma 1.
+        wallets = kandidat[:50] or CopyTrade.DAFTAR_TRADER_MANUAL
 
     # preferensi user dari Telegram (/trader): mode manual + blocklist. Persisten,
     # jadi gak ilang tiap listener restart.
