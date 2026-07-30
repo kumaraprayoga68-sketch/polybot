@@ -49,7 +49,7 @@ def pilih_trader():
         # yang jangka-panjang/nganggur — posisinya kebuang filter resolve. Yang lebih
         # dalam justru ada yang main market pendek (kepake). Pool lebar + TOP_N besar
         # = ada trader lain buat dibandingin, bukan cuma 1.
-        wallets = kandidat[:50] or CopyTrade.DAFTAR_TRADER_MANUAL
+        wallets = kandidat[:100] or CopyTrade.DAFTAR_TRADER_MANUAL
 
     # preferensi user dari Telegram (/trader): mode manual + blocklist. Persisten,
     # jadi gak ilang tiap listener restart.
@@ -68,7 +68,12 @@ def pilih_trader():
         min_wr, min_pnl = CopyTrade.MIN_WIN_RATE_PNL, CopyTrade.MIN_NET_PNL
     lolos, _ = trader_pnl.screening(
         wallets, min_closed=5, min_net_pnl=min_pnl, min_win_rate=min_wr)
-    lolos.sort(key=lambda t: (t["win_rate"], t["net_pnl"]), reverse=True)
+    # Urutan: AKTIVITAS dulu (total_closed), bukan win-rate.
+    # Alasannya terukur: urut by win-rate milih trader SELEKTIF — 10 dari 16 yang
+    # lolos ternyata NOL posisi aktif, jadi gak ada yang bisa ditiru dan satu
+    # trader mendominasi 62% sinyal. Ambang win-rate di screening() udah jaga
+    # kualitas; urutan ini yang mastiin trader-nya beneran main.
+    lolos.sort(key=lambda t: (t.get("total_closed", 0), t["win_rate"]), reverse=True)
     lolos = lolos[:CopyTrade.TOP_N_TRADER]
 
     performa = {t["wallet"]: t for t in lolos}

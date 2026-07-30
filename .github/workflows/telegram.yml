@@ -39,11 +39,16 @@ jobs:
       MIN_ENTRY_PRICE: "0.15"     # skip longshot (harga < 0.15, tiket lotre)
       AGG_MAX_BETS: "25"          # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       TOP_N_TRADER: "20"          # follow SEMUA yg lolos screening. Urutan by win-rate milih trader nganggur/jangka-panjang, jadi cap sempit = cuma 1 trader nyumbang bet.
-      LEADERBOARD_WINDOW: "30d"   # pilih trader by profit 30 hari (skill > hoki mingguan)
+      # 7d, bukan 30d. Diukur: 30d -> 6/16 trader punya posisi aktif, 323 posisi,
+      # 1 trader dominan 62%. 7d -> 17/20 punya posisi, 888 posisi, dominasi 23%.
+      # Trade-off: 7d bisa kepilih trader yg cuma hoki seminggu (30d lebih kebukti).
+      # Diterima karena sekarang ADA pelacakan per-trader + /trader block, jadi yg
+      # jelek bisa diukur & dibuang — dulu waktu milih 30d, alat itu belum ada.
+      LEADERBOARD_WINDOW: "7d"
       ARB_MAX_MARKET: "800"
       ARB_MIN_EDGE_PCT: "5"
       SCANNER_MIN_VOLUME: "50000"
-      AUTO_LOOP_MIN: "30"   # loop otomatis nyala pas boot & nyambung tiap restart (0=mati)
+      AUTO_LOOP_MIN: "15"   # loop tiap 15 mnt (hunt cuma ~1-4 mnt, jadi aman). 0=mati
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       # POLYBOT_DASHBOARD_URL sengaja DIMATIIN: dashboard sekarang baca riwayat.csv
