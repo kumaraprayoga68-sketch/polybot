@@ -36,7 +36,13 @@ jobs:
       FLAT_FRAC: "0.5"
       MAX_HARI_KE_RESOLVE: "7"    # 7 hari: biar posisi trader lain kebawa (1 hari = cuma 1 trader yg lolos)
       MAX_ENTRY_PRICE: "0.85"     # skip favorit (harga > 0.85)
-      MIN_ENTRY_PRICE: "0.15"     # skip longshot (harga < 0.15, tiket lotre)
+      # 0.50, bukan 0.15. Diukur (6.042 bet, tanpa outlier France):
+      #   <$0.50  -> selisih vs harga pasar NEGATIF, periode terbaru -$296 (t=-2.14)
+      #   >=$0.50 -> positif; zona 0.70-0.85 positif di KEDUA periode (t=+1.93)
+      # Cocok sama favorite-longshot bias: longshot sistematis kemahalan.
+      # Ambang 0.15 lama kekurangan tinggi — yg bocor semua di bawah 0.50.
+      # Trade-off: volume bet turun ~49%, data ngumpul lebih lambat.
+      MIN_ENTRY_PRICE: "0.50"
       AGG_MAX_BETS: "25"          # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       TOP_N_TRADER: "20"          # follow SEMUA yg lolos screening. Urutan by win-rate milih trader nganggur/jangka-panjang, jadi cap sempit = cuma 1 trader nyumbang bet.
       # 7d, bukan 30d. Diukur: 30d -> 6/16 trader punya posisi aktif, 323 posisi,
