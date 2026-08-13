@@ -102,11 +102,11 @@ class CopyTrade:
     # 1.0 = filter mati (bet semua harga). 0.85 = cuma bet market "value".
     MAX_ENTRY_PRICE     = _env_float("MAX_ENTRY_PRICE", 0.85)
     # Skip bet UNDERDOG: kalau harga outcome < ini, gak di-bet. 0.0 = filter mati.
-    # 0.50 dari pengukuran 6.042 bet (tanpa outlier France vs England): di bawah
-    # $0.50 win-rate nyata konsisten DI BAWAH yang diisyaratkan harga (periode
-    # terbaru -$296, t=-2.14), di atasnya positif. Sejalan sama favorite-longshot
-    # bias — longshot sistematis kemahalan di prediction market.
-    MIN_ENTRY_PRICE     = _env_float("MIN_ENTRY_PRICE", 0.50)
+    # 0.15 = cuma buang longshot ekstrem (bola antah-berantah harga $0.0005).
+    # Riwayat: sempat dinaikin ke 0.50 (2 Agu) karena zona <$0.50 keliatan bocor,
+    # tapi uji BERSIH-nya gagal — zona 0.50-0.85 yang diprediksi untung malah
+    # -$31 di 3.480 bet (t=-0.28). Dibalikin ke 0.15 pada 13 Agu.
+    MIN_ENTRY_PRICE     = _env_float("MIN_ENTRY_PRICE", 0.15)
 
 
 class Arbitrage:

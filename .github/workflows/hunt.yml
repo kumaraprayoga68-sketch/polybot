@@ -34,7 +34,7 @@ jobs:
       FLAT_FRAC: "0.5"
       MAX_HARI_KE_RESOLVE: "7"    # 7 hari: biar posisi trader lain kebawa (1 hari = cuma 1 trader yg lolos)
       MAX_ENTRY_PRICE: "0.85"        # skip favorit (harga > 0.85)
-      MIN_ENTRY_PRICE: "0.50"        # skip underdog (bocor: <$0.50 selisih negatif vs harga pasar)
+      MIN_ENTRY_PRICE: "0.15"        # skip underdog (bocor: <$0.50 selisih negatif vs harga pasar)
       AGG_MAX_BETS: "25"             # cap IKUT per siklus (dinaikin biar ambil lebih banyak)
       TOP_N_TRADER: "20"          # follow SEMUA yg lolos screening. Urutan by win-rate milih trader nganggur/jangka-panjang, jadi cap sempit = cuma 1 trader nyumbang bet.
       LEADERBOARD_WINDOW: "30d"   # pilih trader by profit 30 hari (skill > hoki mingguan)
