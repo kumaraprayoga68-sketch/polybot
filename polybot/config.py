@@ -107,6 +107,18 @@ class CopyTrade:
     # tapi uji BERSIH-nya gagal — zona 0.50-0.85 yang diprediksi untung malah
     # -$31 di 3.480 bet (t=-0.28). Dibalikin ke 0.15 pada 13 Agu.
     MIN_ENTRY_PRICE     = _env_float("MIN_ENTRY_PRICE", 0.15)
+    # --- UKURAN BET: berbasis SHARE, bukan dolar ---
+    # Polymarket minimum 5 SHARE per order (bukan 5 dolar), jadi biaya minimum =
+    # 5 x harga: $0.75 di harga $0.15, tapi $4.25 di harga $0.85. Bet flat $2.50
+    # yang lama cuma dapet 2.5/harga share -> DITOLAK di 61% market (semua yang
+    # harganya > $0.50). Baru ketahuan pas cek API, gak kelihatan di paper.
+    #
+    # Bonus: share tetap bikin bobot tiap bet ADIL. Dolar tetap kasih jauh lebih
+    # banyak share ke bet murah (2.5/0.15 = 17 share vs 2.5/0.85 = 3), jadi hasil
+    # keseluruhan didominasi taruhan longshot.
+    SIZING_MODE         = os.getenv("SIZING_MODE", "share")      # "share" | "dolar"
+    BET_SHARES          = _env_float("BET_SHARES", 5.0)          # share per bet
+    MIN_SHARES          = _env_float("MIN_SHARES", 5.0)          # lantai dari Polymarket
 
 
 class Arbitrage:

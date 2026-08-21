@@ -10,6 +10,7 @@ Pipeline:
  5. Kalau IKUT -> Kelly (kelly.py) tentukan size berbasis edge (harga live).
  6. Eksekusi paper/live (executor, triple-gated). Semua dicatat (tracker).
 """
+import math
 import time
 from datetime import datetime, timezone
 
@@ -163,7 +164,18 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
             frac = CopyTrade.FLAT_FRAC   # paper agresif: flat fallback biar tetap ada bet
     else:
         frac = CopyTrade.FLAT_FRAC       # Kelly off -> flat sizing (gak diciutin)
-    size = round(Common.MAX_PER_TRADE * frac, 2)
+    if CopyTrade.SIZING_MODE == "share":
+        # Beli sejumlah SHARE, biayanya nyesuain harga (share x harga). Kelly cuma
+        # nyekala jumlah share-nya. Lantai MIN_SHARES wajib: di bawah itu order
+        # ditolak Polymarket.
+        share = CopyTrade.BET_SHARES * (frac / CopyTrade.FLAT_FRAC if CopyTrade.FLAT_FRAC else 1)
+        share = max(CopyTrade.MIN_SHARES, share)
+        # Bulatkan ke ATAS ke sen terdekat. round() biasa bisa bikin share turun
+        # sedikit di bawah minimum (5 x $0.605 = $3.025 -> $3.02 = 4.99 share) dan
+        # order ditolak exchange.
+        size = math.ceil(share * harga * 100) / 100
+    else:
+        size = round(Common.MAX_PER_TRADE * frac, 2)   # cara lama: dolar tetap
     if size <= 0:
         tracker.catat("copytrade", "skip_kelly", market=info["market"][:60], condition_id=cid,
                       outcome=outcome, harga=harga, skor=skor, end_date=info.get("end_date", ""),
