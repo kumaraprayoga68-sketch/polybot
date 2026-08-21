@@ -36,6 +36,7 @@ _CHAT = None
 _job_q = queue.Queue()
 _loop_stop = None
 _loop_thread = None
+_live_pilihan = []  # trader pilihan buat live (dipakai antara /live only dan confirm)
 _live_pending = 0  # timestamp saat /live diminta (butuh /live confirm dalam 60 detik)
 
 
@@ -243,7 +244,8 @@ HELP = (
     "/loop [menit] — nyari peluang terus (default 30m)\n"
     "/stop — hentikan loop\n"
     "/mode — cek paper/live\n"
-    "/live — aktifin trading beneran (2 langkah konfirmasi)\n"
+    "/live — lihat trader aktif + hasil bet kita niru mereka, lalu pilih\n"
+    "        /live all | /live only 0xABC — lalu /live confirm\n"
     "/paper — balik ke simulasi (aman)\n"
     "/window [1d|7d|30d|all] — window leaderboard copy-trade\n"
     "/agresif [on|off] — paper: ikut bet banyak (anti skip mulu)\n"
@@ -293,38 +295,196 @@ def _mode_text():
             else "🟢 <b>PAPER</b> — simulasi (aman)")
 
 
+# ── Setelan AMAN yang otomatis kepasang pas live nyala ────────────────────────
+# Paper boleh ngebut (ngumpulin data). Live TIDAK — modal nyata kejepit di posisi
+# terbuka sampai market resolve (rata2 29 jam, 10% bisa >134 jam). Tanpa rem, bot
+# naruh ~578 bet/hari = butuh modal ribuan dolar, bukan puluhan.
+LIVE_AMAN = {"AUTO_LOOP_MIN": 180, "AGG_MAX_BETS": 1}   # 1 hunt/3 jam, 1 bet/siklus
+_paper_backup = {}
+
+
+def _statistik_trader():
+    """Hasil bet KITA per trader (dari riwayat) — bukan klaim leaderboard mereka."""
+    from . import tracker
+    st = {}
+    try:
+        for r in tracker.baca_semua():
+            if r.get("strategi") != "copytrade" or r.get("resolved") != "true":
+                continue
+            try:
+                pnl = float(r.get("pnl") or 0)
+            except ValueError:
+                continue
+            for w in (r.get("trader") or "").split("|"):
+                w = w.strip().lower()
+                if not w:
+                    continue
+                a = st.setdefault(w, {"n": 0, "menang": 0, "pnl": 0.0})
+                a["n"] += 1
+                a["pnl"] += pnl
+                if r.get("menang") == "true":
+                    a["menang"] += 1
+    except Exception:
+        pass
+    return st
+
+
+def _daftar_trader_live():
+    """Kirim daftar trader aktif + hasil kita niru mereka.
+
+    Dipanggil lewat antrian job karena butuh panggilan API (screening leaderboard
+    + fetch posisi tiap trader) — jangan sampai nge-block polling Telegram.
+    """
+    from ..strategies import copytrade
+    from . import trader_prefs
+    wallets, performa = copytrade.pilih_trader()
+    if not wallets:
+        send("Gak ada trader yang lolos screening sekarang. Coba lagi nanti.")
+        return
+    punya = _statistik_trader()
+    blok = set(trader_prefs.baca()["block"])
+
+    baris = []
+    for w in wallets:
+        aktif = len(copytrade._snapshot_posisi(w))
+        p = performa.get(w, {})
+        k = punya.get(w.lower())
+        if k and k["n"] >= 10:
+            wr = k["menang"] / k["n"] * 100
+            hasil = "kita: {} bet - wr {:.0f}% - ${:+.2f}".format(k["n"], wr, k["pnl"])
+        elif k:
+            hasil = "kita: baru {} bet (kekecilan)".format(k["n"])
+        else:
+            hasil = "kita: belum pernah niru"
+        tag = " [DIBLOKIR]" if w.lower() in blok else ""
+        teks = ("<code>{}</code>{}\n"
+                "   leaderboard wr {:.0f}% - {} posisi aktif\n"
+                "   <i>{}</i>").format(_pendek(w), tag, p.get("win_rate", 0), aktif, hasil)
+        baris.append((aktif, teks))
+    baris.sort(key=lambda x: -x[0])
+
+    send("<b>Trader aktif sekarang</b>\n\n" + "\n".join(b for _, b in baris)
+         + "\n\n<b>Pilih mau copy siapa:</b>\n"
+           "<code>/live all</code> - copy semua di atas\n"
+           "<code>/live only 0xABC</code> - cuma trader tertentu (boleh beberapa)\n\n"
+           "<i>\"kita:\" = hasil bet KITA pas niru dia (paper), bukan klaim leaderboard.</i>")
+
+
+def _pendek(w):
+    return "{}...{}".format(html.escape(w[:8]), html.escape(w[-4:]))
+
+
+def _pasang_setelan_live(nyala):
+    """Pasang/lepas rem laju pas pindah live<->paper. Simpan nilai paper biar bisa balik."""
+    from ..config import CopyTrade
+    global _paper_backup
+    if nyala:
+        if not _paper_backup:
+            _paper_backup = {"AUTO_LOOP_MIN": config.AUTO_LOOP_MIN,
+                             "AGG_MAX_BETS": CopyTrade.AGG_MAX_BETS}
+        config.AUTO_LOOP_MIN = LIVE_AMAN["AUTO_LOOP_MIN"]
+        CopyTrade.AGG_MAX_BETS = LIVE_AMAN["AGG_MAX_BETS"]
+        _stop_loop()
+        _start_loop(config.AUTO_LOOP_MIN)
+    elif _paper_backup:
+        config.AUTO_LOOP_MIN = _paper_backup["AUTO_LOOP_MIN"]
+        CopyTrade.AGG_MAX_BETS = _paper_backup["AGG_MAX_BETS"]
+        _paper_backup = {}
+        _stop_loop()
+        if config.AUTO_LOOP_MIN > 0:
+            _start_loop(config.AUTO_LOOP_MIN)
+
+
 def _cmd_live(arg):
-    """Aktifin live trading — 2 langkah: /live lalu /live confirm (dalam 60 detik)."""
-    global _live_pending
+    """Aktifin live trading. Alur: /live (lihat trader) -> /live all|only -> /live confirm."""
+    global _live_pending, _live_pilihan
+    from . import trader_prefs
     # wallet wajib ada, kalau nggak live gak mungkin jalan
     if not (config.PRIVATE_KEY and config.FUNDER_ADDRESS):
-        send("❌ Wallet belum diset. Isi <code>PRIVATE_KEY</code> &amp; "
-             "<code>FUNDER_ADDRESS</code> di <code>.env</code> dulu — live gak bisa diaktifin.")
+        send("Wallet belum diset. Isi <code>PRIVATE_KEY</code> &amp; "
+             "<code>FUNDER_ADDRESS</code> di <code>.env</code> dulu - live gak bisa diaktifin.")
         return
-    if arg == "confirm":
+
+    parts = (arg or "").split()
+    sub = parts[0].lower() if parts else ""
+
+    # ── langkah 1: tanpa argumen -> tampilkan trader aktif buat dipilih ──
+    if not sub:
+        send("Ngecek trader yang lagi aktif... (butuh ~30 detik)")
+        _enqueue("live-cek-trader", _daftar_trader_live)
+        return
+
+    # ── langkah 3: konfirmasi terakhir ──
+    if sub == "confirm":
         if time.time() - _live_pending > 60:
-            send("⌛ Konfirmasi kadaluarsa. Kirim /live lagi.")
+            send("Konfirmasi kadaluarsa. Kirim /live lagi.")
             return
+        p = trader_prefs.baca()
+        if _live_pilihan:                      # simpan pilihan trader (persisten)
+            p["mode"] = "manual"; p["manual"] = _live_pilihan
+        else:
+            p["mode"] = "auto"; p["manual"] = []
+        trader_prefs.tulis(p)
+
         config.Common.SIMULASI_MODE = False
         config.LIVE_TRADING_ENABLED = True
+        _pasang_setelan_live(True)             # rem laju otomatis
         _live_pending = 0
-        send(f"🔴 <b>LIVE MODE ON</b>. Order BENERAN akan dikirim.\n"
-             f"Hard cap: <b>${config.MAX_ORDER_SIZE_ABSOLUTE}/order</b> (gak bisa diubah dari sini).\n"
-             f"Kirim /paper buat balik ke simulasi.\n"
-             f"⚠️ restart bot = otomatis balik PAPER.")
+        siapa = ("{} trader pilihan".format(len(_live_pilihan)) if _live_pilihan
+                 else "semua trader lolos screening")
+        _live_pilihan = []
+        send("<b>LIVE MODE ON</b>. Order BENERAN akan dikirim.\n\n"
+             "Copy: <b>{}</b>\n"
+             "Hard cap: <b>${}/order</b>\n"
+             "Rem otomatis: 1 hunt tiap <b>{} menit</b>, maks <b>{} bet</b>/siklus\n\n"
+             "/paper buat balik simulasi. Restart bot = otomatis balik PAPER."
+             .format(siapa, config.MAX_ORDER_SIZE_ABSOLUTE,
+                     LIVE_AMAN["AUTO_LOOP_MIN"], LIVE_AMAN["AGG_MAX_BETS"]))
+        return
+
+    # ── langkah 2: pilih trader, lalu minta konfirmasi ──
+    if sub == "all":
+        _live_pilihan = []
+        pilih_txt = "SEMUA trader yang lolos screening"
+    elif sub == "only":
+        if len(parts) < 2:
+            send("Butuh alamat wallet. Contoh: <code>/live only 0x204f</code>")
+            return
+        kandidat = _wallet_dikenal()
+        ok, gagal = [], []
+        for a in parts[1:]:
+            w, err = trader_prefs.cocokkan(a, kandidat)
+            (ok.append(w) if w else gagal.append("{} - {}".format(html.escape(a), html.escape(err))))
+        if gagal:
+            send("Gagal:\n" + "\n".join("  - " + g for g in gagal))
+            if not ok:
+                return
+        _live_pilihan = ok
+        pilih_txt = "cuma:\n" + "\n".join("  - <code>{}</code>".format(_pendek(w)) for w in ok)
     else:
-        _live_pending = time.time()
-        send(f"⚠️ <b>Aktifin LIVE trading?</b> Duit BENERAN bakal kepake.\n"
-             f"Hard cap: ${config.MAX_ORDER_SIZE_ABSOLUTE}/order · budget ${config.Common.BUDGET}\n\n"
-             f"Balas <b>/live confirm</b> dalam 60 detik buat lanjut, atau abaikan buat batal.")
+        send("Pakai: <code>/live</code> (lihat trader) - <code>/live all</code> - "
+             "<code>/live only 0xABC</code>")
+        return
+
+    _live_pending = time.time()
+    send("<b>Aktifin LIVE trading?</b> Duit BENERAN bakal kepake.\n\n"
+         "Copy: <b>{}</b>\n"
+         "Hard cap: ${}/order - budget ${}\n"
+         "Rem otomatis: 1 hunt/{} mnt, {} bet/siklus\n\n"
+         "Balas <b>/live confirm</b> dalam 60 detik, atau abaikan buat batal."
+         .format(pilih_txt, config.MAX_ORDER_SIZE_ABSOLUTE, config.Common.BUDGET,
+                 LIVE_AMAN["AUTO_LOOP_MIN"], LIVE_AMAN["AGG_MAX_BETS"]))
 
 
 def _cmd_paper():
-    global _live_pending
+    global _live_pending, _live_pilihan
     _live_pending = 0
+    _live_pilihan = []
     config.Common.SIMULASI_MODE = True
     config.LIVE_TRADING_ENABLED = False
-    send("🟢 <b>PAPER MODE</b> (simulasi). Aman — gak ada order beneran yang dikirim.")
+    _pasang_setelan_live(False)        # balikin laju cepat buat paper
+    send("<b>PAPER MODE</b> (simulasi). Aman - gak ada order beneran yang dikirim.\n"
+         "Laju balik normal: 1 hunt/{} mnt.".format(config.AUTO_LOOP_MIN))
 
 
 _WINDOW_VALID = ("1d", "7d", "30d", "all")
@@ -636,7 +796,7 @@ def _register_commands():
         {"command": "loop", "description": "nyari peluang terus (menit)"},
         {"command": "stop", "description": "hentikan loop"},
         {"command": "mode", "description": "cek paper/live"},
-        {"command": "live", "description": "aktifin trading beneran"},
+        {"command": "live", "description": "pilih trader + aktifin trading beneran"},
         {"command": "paper", "description": "balik ke simulasi (aman)"},
         {"command": "window", "description": "window leaderboard (1d/7d/30d/all)"},
         {"command": "agresif", "description": "paper: ikut bet banyak (on/off)"},
