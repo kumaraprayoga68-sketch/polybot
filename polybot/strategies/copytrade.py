@@ -109,6 +109,34 @@ def _snapshot_posisi(wallet):
     return snap
 
 
+# Rem eksposur: duit yang lagi nyangkut di posisi BELUM resolve. Dihitung SEKALI
+# per siklus (baca riwayat ~170rb baris), lalu ditambah tiap bet baru dalam siklus
+# yang sama -- kalau dihitung ulang per bet, tiap siklus baca file puluhan kali.
+_rem = {"eksposur": None, "ditolak": 0}
+
+
+def eksposur_terbuka():
+    """Total $ di posisi copytrade yang belum ada baris 'hasil'-nya."""
+    from ..core import tracker
+    ikut, selesai = {}, set()
+    try:
+        for r in tracker.baca_semua():
+            if r.get("strategi") != "copytrade":
+                continue
+            k = (r.get("condition_id"), r.get("outcome"))
+            if r.get("aksi") == "ikut":
+                try:
+                    ikut[k] = float(r.get("size_usd") or 0)
+                except (TypeError, ValueError):
+                    pass
+            elif r.get("aksi") == "hasil":
+                selesai.add(k)
+    except Exception as e:
+        print(f"  ⚠️  gagal hitung eksposur ({e}) — rem dimatiin siklus ini")
+        return None
+    return sum(v for k, v in ikut.items() if k not in selesai)
+
+
 def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
     """
     Skor + keputusan + (kalau IKUT) sizing + eksekusi. Dicatat ke tracker.
@@ -183,7 +211,16 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
         print(f"  ⏭️  SKIP(Kelly) {info['market'][:45]} — harga ${harga} gak ada edge")
         return False
 
+    # REM EKSPOSUR: tolak kalau bikin total posisi terbuka lewat plafon. Dicek
+    # di sini (bukan di satu_siklus) karena size baru ketahuan setelah sizing.
+    if CopyTrade.MAX_EKSPOSUR > 0 and _rem["eksposur"] is not None:
+        if _rem["eksposur"] + size > CopyTrade.MAX_EKSPOSUR:
+            _rem["ditolak"] += 1
+            return False
+
     hasil = executor.place_market_buy(cid, outcome, size)
+    if CopyTrade.MAX_EKSPOSUR > 0 and _rem["eksposur"] is not None:
+        _rem["eksposur"] += size
     tag = " [agresif]" if agresif else ""
     tracker.catat("copytrade", "ikut", market=info["market"][:60], condition_id=cid,
                   outcome=outcome, harga=harga, size_usd=size, skor=skor,
@@ -215,6 +252,14 @@ def satu_siklus(wallets, performa, state):
     butuh = 1 if (CopyTrade.SINGLE_TRADER_MODE or _agresif()) else 2
     bet_count = 0
     skip_jauh = skip_zombie = 0
+    # hitung eksposur sekali per siklus (dipakai rem di _evaluasi_sinyal)
+    _rem["ditolak"] = 0
+    _rem["eksposur"] = eksposur_terbuka() if CopyTrade.MAX_EKSPOSUR > 0 else None
+    if _rem["eksposur"] is not None:
+        sisa = CopyTrade.MAX_EKSPOSUR - _rem["eksposur"]
+        print(f"  🛡️  eksposur terbuka ${_rem['eksposur']:,.2f} / "
+              f"${CopyTrade.MAX_EKSPOSUR:,.0f} — sisa ruang ${max(0, sisa):,.2f}")
+
     for (cid, outcome), data in holders.items():
         pendukung = data["pendukung"]
         if len(pendukung) < butuh:
@@ -237,6 +282,10 @@ def satu_siklus(wallets, performa, state):
                 print(f"  ⏸️  cap {CopyTrade.AGG_MAX_BETS} bet/siklus tercapai — sisanya siklus berikut.")
                 break
 
+    if _rem["ditolak"]:
+        print(f"  🛑 {_rem['ditolak']} bet DITOLAK rem eksposur "
+              f"(plafon ${CopyTrade.MAX_EKSPOSUR:,.0f} kepake habis). "
+              f"Nunggu posisi lama resolve dulu.")
     if skip_jauh:
         print(f"  ⏭️  {skip_jauh} market di-skip (resolve > {CopyTrade.MAX_HARI_KE_RESOLVE} hari).")
     if skip_zombie:

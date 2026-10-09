@@ -119,6 +119,16 @@ class CopyTrade:
     SIZING_MODE         = os.getenv("SIZING_MODE", "share")      # "share" | "dolar"
     BET_SHARES          = _env_float("BET_SHARES", 5.0)          # share per bet
     MIN_SHARES          = _env_float("MIN_SHARES", 5.0)          # lantai dari Polymarket
+    # --- REM EKSPOSUR KERAS ---
+    # Batas TOTAL duit yang lagi nyangkut di posisi BELUM resolve. Bukan batas
+    # per-bet (itu MAX_PER_TRADE) dan bukan batas harian — ini plafon kumulatif:
+    # duit baru bisa dipakai lagi setelah posisi lama resolve.
+    #
+    # Kenapa perlu: bot gak nunggu bet selesai sebelum bet lagi. Modal nyangkut
+    # rata-rata 29 jam (10% > 134 jam), jadi posisi numpuk. Tanpa rem ini,
+    # eksposur pernah tembus $5.120. Hukum Little: posisi terbuka = laju x lama
+    # nyangkut -- MEMBATASI LAJU TIDAK CUKUP, karena lama nyangkut di luar kendali.
+    MAX_EKSPOSUR        = _env_float("MAX_EKSPOSUR", 100.0)      # 0 = rem mati
 
 
 class Arbitrage:
