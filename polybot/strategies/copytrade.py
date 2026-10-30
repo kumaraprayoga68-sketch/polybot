@@ -116,8 +116,18 @@ _rem = {"eksposur": None, "ditolak": 0}
 
 
 def eksposur_terbuka():
-    """Total $ di posisi copytrade yang belum ada baris 'hasil'-nya."""
+    """Total $ di posisi yang masih HIDUP (belum resolve DAN masih mungkin resolve).
+
+    Posisi ZOMBIE tidak dihitung. Zombie = end_date lewat > _ZOMBIE_HARI tapi
+    market gak pernah settle; evaluate.py sengaja berhenti ngecek yang begini,
+    jadi mereka TIDAK AKAN PERNAH dapat baris 'hasil'. Kalau ikut dihitung,
+    eksposur gak pernah turun dan rem nyekek bot selamanya -- persis yang kejadian
+    9-30 Okt 2026: 247 zombie senilai $629 bikin plafon $100 mentok permanen,
+    nol bet selama 21 hari.
+    """
+    from datetime import date
     from ..core import tracker
+    from ..core.evaluate import _ZOMBIE_HARI
     ikut, selesai = {}, set()
     try:
         for r in tracker.baca_semua():
@@ -126,7 +136,7 @@ def eksposur_terbuka():
             k = (r.get("condition_id"), r.get("outcome"))
             if r.get("aksi") == "ikut":
                 try:
-                    ikut[k] = float(r.get("size_usd") or 0)
+                    ikut[k] = (float(r.get("size_usd") or 0), r.get("end_date") or "")
                 except (TypeError, ValueError):
                     pass
             elif r.get("aksi") == "hasil":
@@ -134,7 +144,21 @@ def eksposur_terbuka():
     except Exception as e:
         print(f"  ⚠️  gagal hitung eksposur ({e}) — rem dimatiin siklus ini")
         return None
-    return sum(v for k, v in ikut.items() if k not in selesai)
+
+    hari_ini, total, zombie = date.today(), 0.0, 0
+    for k, (nilai, end) in ikut.items():
+        if k in selesai:
+            continue
+        try:
+            if (hari_ini - date.fromisoformat(end[:10])).days > _ZOMBIE_HARI:
+                zombie += 1
+                continue            # market mati -> bukan eksposur hidup
+        except ValueError:
+            pass                    # end_date kosong/aneh -> tetap dihitung (aman)
+        total += nilai
+    if zombie:
+        print(f"  \U0001f9df {zombie} posisi zombie diabaikan dari hitungan eksposur.")
+    return total
 
 
 def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
