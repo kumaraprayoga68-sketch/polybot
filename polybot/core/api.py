@@ -154,8 +154,16 @@ def trader_activity(wallet, limit=500, offset=0, activity_type=None):
 # ── LEADERBOARD: auto-pilih trader ────────────────────────────────────────────
 def leaderboard(window="30d", limit=100):
     """
-    Top trader by profit dari lb-api /profit (window mis. '30d'/'7d'/'all').
-    Balikin list dict berisi 'proxyWallet' + 'pseudonym' + 'amount' (profit).
+    Top trader by profit dari data-api /v2/leaderboard.
+
+    Bentuk respons: {"data": [{"user_id", "pnl", "volume", "user_name", ...}],
+                     "pagination": {...}}
+    Alamat wallet ada di 'user_id' (dulu di lb-api namanya 'proxyWallet').
+
+    CATATAN: `window` sudah TIDAK berpengaruh di endpoint baru — dicoba window=,
+    period=, t=, rangeType= dengan nilai day/week/month/all, semuanya balikin
+    hasil identik (cursor internal selalu t="day"). Parameter tetap diterima biar
+    pemanggil lama gak rusak, tapi jangan dikira ngefek.
     """
     data = _get(config.LEADERBOARD_URL, params={"window": window, "limit": limit})
     if isinstance(data, list):

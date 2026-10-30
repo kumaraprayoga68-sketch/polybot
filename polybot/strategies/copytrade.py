@@ -43,7 +43,10 @@ def pilih_trader():
         lb = api.leaderboard(window=CopyTrade.LEADERBOARD_WINDOW, limit=100)
         kandidat = []
         for row in lb:
-            addr = row.get("proxyWallet") or row.get("wallet") or row.get("address") or row.get("user")
+            # user_id = nama field di data-api /v2/leaderboard (endpoint baru);
+            # sisanya nama lama lb-api, disimpen biar kompatibel.
+            addr = (row.get("user_id") or row.get("proxyWallet") or row.get("wallet")
+                    or row.get("address") or row.get("user"))
             if addr:
                 kandidat.append(addr)
         # Screening 50 (bukan 20): trader win-rate tinggi di puncak leaderboard banyak

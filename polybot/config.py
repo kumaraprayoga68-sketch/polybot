@@ -35,7 +35,11 @@ def _env_float(name, default):
 GAMMA_URL       = "https://gamma-api.polymarket.com/markets"
 CLOB_HOST       = "https://clob.polymarket.com"
 DATA_API        = "https://data-api.polymarket.com"
-LEADERBOARD_URL = "https://lb-api.polymarket.com/profit"
+# lb-api.polymarket.com DIRETIRE ~15 Okt 2026 (balikin {"error": "...has been
+# retired. Use https://data-api.polymarket.com/v2/leaderboard instead."}).
+# Matinya senyap: api._get nelen error jadi list kosong -> "gak ada trader lolos
+# screening" -> bot berhenti bet 15-30 Okt tanpa error apa pun.
+LEADERBOARD_URL = "https://data-api.polymarket.com/v2/leaderboard"
 
 # ── KREDENSIAL (dari .env, cuma perlu buat LIVE trading) ───────────────────────
 PRIVATE_KEY    = os.getenv("PRIVATE_KEY", "")
