@@ -90,6 +90,8 @@ def _persist_riwayat():
         git("add", "-f", "data/riwayat.csv")
         if os.path.exists("data/trader_prefs.json"):
             git("add", "-f", "data/trader_prefs.json")
+        if os.path.exists("data/dampak_harga.csv"):
+            git("add", "-f", "data/dampak_harga.csv")
         if git("diff", "--cached", "--quiet").returncode == 0:
             return                  # gak ada perubahan, gak perlu commit
         git("commit", "-m", "chore: update riwayat (listener) [skip ci]")

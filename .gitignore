@@ -3,6 +3,7 @@
 data/*
 !data/riwayat.csv
 !data/trader_prefs.json
+!data/dampak_harga.csv
 __pycache__/
 *.pyc
 .venv/

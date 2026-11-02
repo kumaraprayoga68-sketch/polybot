@@ -14,7 +14,7 @@ import math
 import time
 from datetime import datetime, timezone
 
-from ..core import api, executor, scoring, kelly, tracker, notify, trader_pnl, trader_prefs
+from ..core import dampak, api, executor, scoring, kelly, tracker, notify, trader_pnl, trader_prefs
 from ..config import CopyTrade, Common
 
 
@@ -108,6 +108,9 @@ def _snapshot_posisi(wallet):
                 "market": p.get("title", p.get("question", "N/A")),
                 "harga": cur if cur > 0 else None,
                 "end_date": p.get("endDate", ""),
+                # 'asset' = token_id CLOB. Dibawa biar pengukuran dampak harga
+                # nanti cukup 1 panggilan (/midpoint), gak perlu lookup market.
+                "token_id": p.get("asset", ""),
             }
     return snap
 
@@ -279,6 +282,29 @@ def satu_siklus(wallets, performa, state):
     butuh = 1 if (CopyTrade.SINGLE_TRADER_MODE or _agresif()) else 2
     bet_count = 0
     skip_jauh = skip_zombie = 0
+    # --- UKUR DAMPAK HARGA (riset, gak ganggu keputusan bet) ---
+    # Dicatat untuk SEMUA posisi baru yang kelihatan, bukan cuma yang kita bet:
+    # yang diukur sinyal TRADER-nya, bukan hasil saringan kita.
+    try:
+        lama_snap = state.get("last") or {}
+        posisi_baru = []
+        for w, snap in posisi_sekarang.items():
+            sebelum = lama_snap.get(w) or {}
+            for (cid, outcome), inf in snap.items():
+                if (cid, outcome) in sebelum:
+                    continue            # bukan posisi baru
+                posisi_baru.append({"wallet": w, "condition_id": cid,
+                                    "outcome": outcome, "token_id": inf.get("token_id", ""),
+                                    "market": inf.get("market", ""), "harga": inf.get("harga")})
+        n_catat = dampak.catat_baru(posisi_baru)
+        n_ukur = dampak.ukur_jatuh_tempo()
+        if n_catat or n_ukur:
+            r = dampak.ringkas()
+            print(f"  \U0001f4c8 dampak harga: +{n_catat} dicatat, {n_ukur} diukur "
+                  f"(total {r['total']}, terukur {r['terukur']})")
+    except Exception as e:
+        print(f"  \u26a0\ufe0f  pencatatan dampak harga gagal ({e}) \u2014 diabaikan, bot lanjut")
+
     # hitung eksposur sekali per siklus (dipakai rem di _evaluasi_sinyal)
     _rem["ditolak"] = 0
     _rem["eksposur"] = eksposur_terbuka() if CopyTrade.MAX_EKSPOSUR > 0 else None
