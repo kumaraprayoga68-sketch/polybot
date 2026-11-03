@@ -30,6 +30,7 @@ from contextlib import redirect_stdout
 import requests
 
 from .. import config
+from . import notify
 
 _API = None
 _CHAT = None
@@ -45,18 +46,18 @@ def _api(method):
 
 
 def send(text, chat_id=None):
-    """Kirim pesan (HTML). Trim ke batas Telegram (~4096)."""
+    """Kirim pesan (HTML). Trim ke batas Telegram (~4096).
+
+    Lewat notify.kirim biar ikut REM LAJU yang sama dengan alert strategi —
+    kalau engga, alert bet dan balasan command saling nabrak di 429 dan
+    dua-duanya ilang (lihat catatan di notify.py).
+    """
     chat = chat_id or _CHAT
     if not chat:
         return
     if len(text) > 4000:
         text = text[:4000] + "\n… (dipotong)"
-    try:
-        requests.post(_api("sendMessage"),
-                      json={"chat_id": chat, "text": text, "parse_mode": "HTML",
-                            "disable_web_page_preview": True}, timeout=10)
-    except Exception:
-        pass
+    notify.kirim(text, parse_mode="HTML", chat_id=chat)
 
 
 def _pre(s):
@@ -868,13 +869,26 @@ def run():
     threading.Thread(target=_job_worker, daemon=True).start()
     _register_commands()
 
-    # skip pesan lama biar command basi gak ke-eksekusi ulang
-    offset = None
+    # Buang command BASI biar gak ke-eksekusi ulang tiap restart — TAPI jangan
+    # buang yang baru. Listener restart tiap ~5-6 jam dan butuh ~40 detik buat
+    # naik lagi; command yang kamu kirim pas jeda itu dulu dibuang diam-diam
+    # (offset=-1 = lompatin semua) sehingga bot kelihatan "gak nyahut" dan kamu
+    # ngetik ulang. Sekarang yang umurnya <= 5 menit tetep dijalanin.
+    offset, tertunda = None, []
     try:
-        old = requests.get(_api("getUpdates"), params={"timeout": 0, "offset": -1}, timeout=15).json()
+        old = requests.get(_api("getUpdates"), params={"timeout": 0}, timeout=15).json()
         res = old.get("result", [])
         if res:
             offset = res[-1]["update_id"] + 1
+            batas = time.time() - 300
+            for u in res:
+                msg = u.get("message") or {}
+                if (msg.get("date") or 0) < batas:
+                    continue
+                if str(msg.get("chat", {}).get("id", "")) != _CHAT:
+                    continue      # chat lain: diabaikan, sama kaya loop utama
+                if msg.get("text"):
+                    tertunda.append(msg["text"])
     except Exception:
         pass
 
@@ -886,6 +900,12 @@ def run():
     # loop selalu balik OFF tiap restart karena state-nya cuma di memori proses.
     if config.AUTO_LOOP_MIN and config.AUTO_LOOP_MIN > 0:
         _start_loop(max(5, config.AUTO_LOOP_MIN))
+
+    # command yang masuk pas listener lagi restart (lihat catatan di atas)
+    if tertunda:
+        send(f"📨 {len(tertunda)} command ketinggalan pas restart — gw jalanin sekarang.")
+        for t in tertunda:
+            _handle(t)
 
     while True:
         try:

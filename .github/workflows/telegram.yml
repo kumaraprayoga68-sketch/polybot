@@ -11,7 +11,12 @@ name: polybot Telegram control (listener 24/7)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 */5 * * *"   # backup restart (GitHub schedule = best-effort)
+    # Backup restart kalau self-dispatch gagal (schedule = best-effort).
+    # Dulu tiap 5 jam. Masalahnya listener nge-restart diri sendiri tiap 5j40m,
+    # jadi cron ini nabrak terus dan (karena cancel-in-progress) MEMBUNUH
+    # listener yang sehat di tengah jalan -- ada run yang cuma idup 26 menit.
+    # Tiap 12 jam: jaring penyelamatnya tetep ada, tabrakannya 3x lebih jarang.
+    - cron: "0 */12 * * *"
 
 permissions:
   actions: write            # buat self re-dispatch (restart diri sendiri)

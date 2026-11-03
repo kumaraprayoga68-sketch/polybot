@@ -120,6 +120,38 @@ def _snapshot_posisi(wallet):
 # yang sama -- kalau dihitung ulang per bet, tiap siklus baca file puluhan kali.
 _rem = {"eksposur": None, "ditolak": 0}
 
+# Alert bet DIKUMPULIN dulu, dikirim SEKALI per siklus. Dulu 1 pesan per bet:
+# pernah 25 bet di menit yang sama = 25 pesan beruntun -> Telegram 429 -> pesannya
+# ilang DAN balasan command kamu ketahan selama jeda hukuman (bot kelihatan lemot).
+# Satu ringkasan juga jauh lebih enak dibaca di HP.
+_alert_bet = []
+
+
+def _aman_md(s):
+    """Buang karakter yang bikin Telegram Markdown gagal parse.
+
+    Kalau satu judul market ada '*' / '_' / '`', Telegram nolak SELURUH pesan
+    (400 can't parse entities). Dulu yang ilang paling 1 alert; sekarang satu
+    pesan isi sampai 25 bet, jadi satu judul nakal bisa ngilangin semuanya.
+    Jarang (12 dari 197rb baris riwayat, semuanya "Hapoel Be`er Sheva") tapi
+    murah banget buat dijagain.
+    """
+    return "".join(c for c in s if c not in "*_[]`")
+
+
+def _kirim_alert_bet():
+    """Kirim satu ringkasan bet untuk siklus ini, lalu kosongin antrian."""
+    if not _alert_bet:
+        return
+    n = len(_alert_bet)
+    total = sum(s for _, s in _alert_bet)
+    baris = [b for b, _ in _alert_bet[:15]]
+    if n > 15:
+        baris.append(f"… dan {n - 15} bet lagi")
+    baris.append(f"Total: ${total:,.2f}")
+    notify.alert_sinyal(f"✅ {n} copy-trade bet", baris)
+    _alert_bet.clear()
+
 
 def eksposur_terbuka():
     """Total $ di posisi yang masih HIDUP (belum resolve DAN masih mungkin resolve).
@@ -258,9 +290,9 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
                   trader="|".join(pendukung),   # simpen wallet yg di-copy -> buat win-rate per trader
                   keterangan=f"{len(pendukung)} trader · {hasil['status']}{tag}")
     print(f"  ✅ IKUT {info['market'][:45]} '{outcome}' ${size} (skor {skor}, {hasil['status']}){tag}")
-    notify.alert_sinyal("✅ Copy-trade signal" + tag, [
-        f"{info['market'][:55]}", f"Outcome: {outcome} @ ${harga}",
-        f"Size: ${size} · Skor: {skor} · {len(pendukung)} trader · {hasil['status']}"])
+    # dikumpulin, dikirim sekali di akhir siklus (lihat _kirim_alert_bet)
+    _alert_bet.append((f"• {_aman_md(info['market'][:45])} — {outcome} @ ${harga} "
+                       f"· ${size} · {len(pendukung)} trader{tag}", size))
     return True
 
 
@@ -334,6 +366,8 @@ def satu_siklus(wallets, performa, state):
             if _agresif() and bet_count >= CopyTrade.AGG_MAX_BETS:
                 print(f"  ⏸️  cap {CopyTrade.AGG_MAX_BETS} bet/siklus tercapai — sisanya siklus berikut.")
                 break
+
+    _kirim_alert_bet()
 
     if _rem["ditolak"]:
         print(f"  🛑 {_rem['ditolak']} bet DITOLAK rem eksposur "
