@@ -64,6 +64,14 @@ def catat(strategi, aksi, **kw):
             w.writeheader()
         w.writerow(row)
 
+    # Jaga cache dedup sinkron sama baris yang BARUSAN kita tulis, dan segerin
+    # stat-nya — kalau engga, tiap catat() bikin cache-nya kebuang dan siklus
+    # berikutnya parse ulang 48 MB (lihat catatan di _muat_kunci).
+    global _cache_stat
+    if _kunci_cache is not None:
+        _kunci_cache.add((row.get("condition_id", ""), row.get("outcome", "")))
+        _cache_stat = _stat(path)
+
     # Push ke dashboard Vercel (fail-safe; gak nge-block kalau gagal/gak dikonfigurasi).
     event = dict(row)
     event["id"] = "EVT-" + uuid.uuid4().hex[:12]
@@ -80,9 +88,55 @@ def baca_semua():
         return list(csv.DictReader(f))
 
 
+# ── cache dedup ───────────────────────────────────────────────────────────────
+# sudah_dievaluasi() dipanggil SEKALI PER KANDIDAT, dan dulu dia manggil
+# baca_semua() -> parse ulang riwayat.csv (48 MB, 196rb baris) tiap panggilan.
+# Terukur 3 Nov: satu siklus 484 kandidat -> 10 bet kelar dalam 35 detik, tapi
+# siklusnya baru beres 17 MENIT kemudian, hampir semuanya kebuang di sini.
+#
+# Sekarang kuncinya di-cache. Divalidasi pakai (ukuran, mtime) file: kalau file
+# diganti pihak lain (mis. git pull --rebase di _persist_riwayat narik baris dari
+# hunt.yml) stat-nya beda -> cache dibangun ulang. Append dari catat() kita
+# sendiri nambahin kunci + nyegerin stat, jadi nulis gak bikin cache kebuang.
+_kunci_cache = None     # set of (condition_id, outcome)
+_cache_stat = None      # (ukuran, mtime_ns) file pas cache dibikin
+
+
+def _stat(path):
+    try:
+        st = os.stat(path)
+        return (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
+def _muat_kunci(path):
+    """Set semua (condition_id, outcome) di riwayat. Streaming, bukan DictReader."""
+    global _kunci_cache, _cache_stat
+    st = _stat(path)
+    if _kunci_cache is not None and st == _cache_stat:
+        return _kunci_cache
+    kunci = set()
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            baris = csv.reader(f)
+            head = next(baris, None)
+            if head and "condition_id" in head and "outcome" in head:
+                i_cid, i_out = head.index("condition_id"), head.index("outcome")
+                lebar = max(i_cid, i_out)
+                for b in baris:
+                    if len(b) > lebar:
+                        kunci.add((b[i_cid], b[i_out]))
+    except OSError:
+        pass
+    _kunci_cache, _cache_stat = kunci, st
+    return kunci
+
+
 def sudah_dievaluasi(condition_id, outcome):
-    """Cek apakah sinyal (market+outcome) ini udah pernah dicatat (dedup)."""
-    for r in baca_semua():
-        if r.get("condition_id") == condition_id and r.get("outcome") == outcome:
-            return True
-    return False
+    """Cek apakah sinyal (market+outcome) ini udah pernah dicatat (dedup).
+
+    Sengaja ngecek SEMUA aksi (ikut, skip_harga, hasil, dll), sama kaya versi
+    lama yang nyisir tiap baris — bukan cuma baris 'ikut'.
+    """
+    return (condition_id, outcome) in _muat_kunci(_path())
