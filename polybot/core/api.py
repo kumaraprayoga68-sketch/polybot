@@ -23,7 +23,33 @@ _HEADERS = {
 }
 
 
-_dilapor = {}      # path endpoint -> kapan terakhir dilaporin (biar gak spam)
+_dilapor = {}       # path -> kapan terakhir di-LOG (redaman log)
+_dialarm = {}       # path -> kapan terakhir di-ALERT (redaman Telegram, terpisah)
+_beruntun = {}      # path -> gagal berturut-turut (direset tiap sukses)
+_AMBANG_BERUNTUN = 20
+
+# Kata yang nandain ENDPOINT-nya yang berubah, bukan resource-nya yang gak ada.
+_PETUNJUK_KONTRAK = ("retire", "deprecat", "no longer", "has been removed",
+                     "not a query param", "invalid_request", "unsupported")
+
+
+def _kontrak_berubah(status, badan):
+    """Bedain "kontrak/endpoint berubah" dari "resource-nya aja yang gak ada".
+
+    404 itu RUTIN dan gak boleh bikin alert: /midpoint balas
+    404 "No orderbook exists for the requested token id" buat token yang order
+    book-nya udah gak ada -- sering kejadian pas ngukur dampak harga di market
+    yang udah kelar. Versi pertama rem ini nganggep SEMUA 4xx sebagai kontrak
+    berubah dan langsung teriak buat kasus itu. Alert yang bohong bikin alert
+    diabaikan, dan itu sama bahayanya sama gagal senyap.
+
+    404 tetep dijaga lewat jalur lain: kalau satu path gagal 20x BERUNTUN tanpa
+    sekali pun sukses, itu bukan resource nyasar lagi -- endpoint-nya yang mati.
+    """
+    b = (badan or "").lower()
+    if any(k in b for k in _PETUNJUK_KONTRAK):
+        return True
+    return status in (400, 410, 422, 501)
 
 
 def _lapor_gagal(url, status, badan):
@@ -35,23 +61,38 @@ def _lapor_gagal(url, status, badan):
     pemanggil nerjemahin jadi list kosong, dan "nol posisi" gak bisa dibedain
     dari "trader gak punya posisi". Listener tetep kelihatan sehat.
 
-    Sekarang: selalu nongol di log Actions, dan kalau 4xx (= kontrak berubah,
-    bukan gangguan jaringan sesaat) dikirim ke Telegram. Diredam 1 jam per
-    path, jadi 20 wallet yang gagal di endpoint yang sama = 1 alert.
+    Sekarang SELALU nongol di log Actions. Yang dikirim ke Telegram cuma yang
+    beneran gawat: kontrak/endpoint berubah (lihat _kontrak_berubah), atau satu
+    path gagal 20x beruntun. Diredam 1 jam per path, jadi 20 wallet yang gagal
+    di endpoint yang sama = 1 alert.
     """
     path = urlsplit(url).path or url
-    if time.time() - _dilapor.get(path, 0) < 3600:
-        return
-    _dilapor[path] = time.time()
+    beruntun = _beruntun.get(path, 0)
+    sekarang = time.time()
     pesan = f"{path} gagal (HTTP {status}): {(badan or '')[:160]}"
-    print(f"  ⚠️  API {pesan}")
-    if status and 400 <= status < 500 and status != 429:
-        try:
-            from . import notify
-            notify.kirim(f"🚨 *API Polymarket berubah*\n`{pesan}`\n\n"
-                         f"Bot kemungkinan BERHENTI nge-bet sampai ini dibenerin.")
-        except Exception:
-            pass
+
+    # Redaman log dan redaman alert HARUS terpisah. Pernah digabung: begitu
+    # kegagalan pertama ke-log, path-nya keredam 1 jam, jadi eskalasi "20x
+    # beruntun" gak pernah sampe dikirim.
+    if sekarang - _dilapor.get(path, 0) >= 3600:
+        _dilapor[path] = sekarang
+        print(f"  ⚠️  API {pesan}  [gagal beruntun: {beruntun}]")
+
+    if _kontrak_berubah(status, badan):
+        alasan = "Kontrak/endpoint-nya berubah."
+    elif beruntun >= _AMBANG_BERUNTUN:
+        alasan = f"Gagal {beruntun}x BERUNTUN — kemungkinan endpoint-nya mati."
+    else:
+        return                 # gangguan sesaat / resource gak ada: log doang
+    if sekarang - _dialarm.get(path, 0) < 3600:
+        return
+    _dialarm[path] = sekarang
+    try:
+        from . import notify
+        notify.kirim(f"🚨 *API Polymarket bermasalah*\n`{pesan}`\n\n{alasan}\n"
+                     f"Bot kemungkinan BERHENTI nge-bet sampai ini dibenerin.")
+    except Exception:
+        pass
 
 
 def _get(url, params=None, max_retry=2, timeout=12):
@@ -60,6 +101,7 @@ def _get(url, params=None, max_retry=2, timeout=12):
     Kalau akhirnya gagal, dilaporin lewat _lapor_gagal — JANGAN dibikin senyap
     lagi (lihat catatan di sana).
     """
+    path = urlsplit(url).path or url
     status, badan = None, ""
     for attempt in range(max_retry + 1):
         try:
@@ -70,15 +112,18 @@ def _get(url, params=None, max_retry=2, timeout=12):
                 continue
             if 400 <= status < 500 and status != 429:
                 # 4xx gak bakal beda kalau diulang — endpoint/paramnya yang salah.
+                _beruntun[path] = _beruntun.get(path, 0) + 1
                 _lapor_gagal(url, status, r.text)
                 return None
             r.raise_for_status()
+            _beruntun.pop(path, None)     # sukses -> hitungan beruntun direset
             return r.json()
         except Exception as e:
             badan = badan or str(e)
             if attempt < max_retry:
                 time.sleep(1.5 * (attempt + 1))
                 continue
+            _beruntun[path] = _beruntun.get(path, 0) + 1
             _lapor_gagal(url, status, badan)
             return None
     return None
