@@ -88,7 +88,16 @@ def main():
         print()
         print("=== 2. KAPAN GERAKANNYA TERJADI? ===")
         m1, m6 = st.mean(d1), st.mean(d6)
-        if abs(m6) > 1e-9:
+        se6 = st.stdev(d6) / math.sqrt(len(d6))
+        # Porsi = m1/m6 cuma bermakna kalau m6 BEDA DARI NOL secara meyakinkan.
+        # Kalau dua-duanya ~nol, bagi-bagiannya ngasih angka ngawur (pernah
+        # keluar "198%") dan kesimpulannya nyesatin.
+        if abs(m6) < 1.96 * se6:
+            print("  Gerakan 6 jam gak beda dari nol, jadi porsinya GAK BISA dihitung.")
+            print("  (bagi dua angka yang sama-sama ~nol = hasilnya ngawur)")
+            print("  -> Pertanyaan 'kapan gerakannya' baru bisa dijawab kalau")
+            print("     gerakannya sendiri terbukti ada.")
+        else:
             porsi = m1 / m6 * 100
             print(f"  jam pertama menyumbang {porsi:.0f}% dari total gerakan 6 jam")
             if porsi > 80:
@@ -96,8 +105,6 @@ def main():
                 print("     0-15 menit kemungkinan besar udah ketinggalan.")
             elif porsi < 40:
                 print("  -> Gerakan nyebar; masuk belakangan masih mungkin kebagian.")
-        else:
-            print("  gerakan 6 jam ~nol, porsi gak bermakna dihitung")
 
     print()
     print("=== 3. PER TRADER (T+1 jam, min 30 posisi) ===")
