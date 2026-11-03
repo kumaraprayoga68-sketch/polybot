@@ -28,15 +28,15 @@ def _fetch_resolved_positions(wallet):
 
 def _fetch_activity_all(wallet, page_size=500, max_records=1500):
     # 1500 record cukup buat estimasi win rate; lebih dari itu bikin screening lambat.
-    semua, offset = [], 0
+    # Data API v2 cursor-only: 'offset' ditolak 400, halaman lanjut pakai next_cursor.
+    semua, cursor = [], None
     while len(semua) < max_records:
-        page = api.trader_activity(wallet, limit=page_size, offset=offset)
+        page, cursor = api.trader_activity_page(wallet, limit=page_size, cursor=cursor)
         if not page:
             break
         semua.extend(page)
-        if len(page) < page_size:
+        if not cursor:
             break
-        offset += page_size
         time.sleep(0.3)
     return semua
 
