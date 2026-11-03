@@ -27,7 +27,11 @@ from .. import config
 # semua tiap siklus. 1600 call ≈ 9 menit, muat di loop 30 menit; sekali backlog
 # kelar, kandidat anjlok jadi ratusan (yg udah resolve keluar antrian) = 2-3 menit.
 _MAX_CEK_PER_SIKLUS = 2000  # safety valve anti-runaway, bukan penyekik
-_ZOMBIE_HARI = 14           # end_date lewat > ini & masih open = zombie, berhenti dicek
+_ZOMBIE_HARI = 14           # end_date lewat > ini = "telat", turun prioritas (BUKAN dibuang)
+# Berapa baris telat yang ikut dicek per siklus, di luar cap di atas. 354ms/call,
+# jadi 25 = ~9 detik/siklus: backlog 247 kekuras dalam ~10 siklus tanpa nunda
+# resolusi segar. Jangan digedein tanpa alasan — ini sengaja pelan tapi pasti.
+_SLOT_TELAT = 25
 
 
 def _hari_lewat(end_date):
@@ -91,11 +95,18 @@ def scorecard():
     print(f"  (angka ini sama dengan dashboard — evaluasi otomatis jalan tiap 30 menit di CI)")
 
 
-def _sudah_dievaluasi(rows, cid, outcome):
-    for r in rows:
-        if r.get("aksi") == "hasil" and r.get("condition_id") == cid and r.get("outcome") == outcome:
-            return True
-    return False
+def _kunci_hasil(rows):
+    """Set (condition_id, outcome) yang UDAH punya baris 'hasil'.
+
+    Dulu ini fungsi `_sudah_dievaluasi(rows, cid, outcome)` yang nyisir SELURUH
+    riwayat tiap dipanggil, dan dipanggil sekali per baris 'ikut'. Terukur
+    3 Nov di data asli: 6-20 ms per panggilan x 41.712 baris = **9 MENIT** cuma
+    buat nyusun daftar kandidat. Bareng ongkos serupa di tracker, itu persis
+    yang bikin satu siklus makan 17 menit padahal bet-nya kelar 35 detik.
+    Dibangun sekali jadi set: 0,06 detik.
+    """
+    return {(r.get("condition_id"), r.get("outcome"))
+            for r in rows if r.get("aksi") == "hasil"}
 
 
 def _pnl_paper(size, harga, menang):
@@ -119,10 +130,11 @@ def run():
         print("📭 riwayat.csv kosong — belum ada yang bisa dievaluasi.")
         return
 
+    sudah = _kunci_hasil(rows)
     kandidat = [r for r in rows
                 if r.get("aksi") in ("ikut", "eksekusi")
                 and r.get("condition_id") and r.get("outcome")
-                and not _sudah_dievaluasi(rows, r["condition_id"], r["outcome"])]
+                and (r["condition_id"], r["outcome"]) not in sudah]
 
     if not kandidat:
         print("✅ Gak ada posisi baru yang perlu dievaluasi (semua sudah / belum ada IKUT).")
@@ -130,11 +142,11 @@ def run():
 
     # Prioritas biar evaluate gak keok kalau kandidat menumpuk:
     #  - end_date masih KE DEPAN  -> mustahil udah resolve, skip (hemat panggilan)
-    #  - end_date lewat > ZOMBIE  -> market zombie, gak resolve2, skip
+    #  - end_date lewat > ZOMBIE  -> antre prioritas RENDAH (lihat bawah)
     #  - end_date kosong          -> gak tau, tetep cek (taro paling belakang)
     # Sisanya urut PALING BARU BERAKHIR DULU -> resolusi segar selalu keproses
     # walau kena cap per siklus.
-    layak = []
+    layak, telat = [], []
     for r in kandidat:
         hl = _hari_lewat(r.get("end_date"))
         if hl is None:
@@ -142,7 +154,7 @@ def run():
         elif hl < 0:
             continue                         # belum waktunya (mustahil udah resolve)
         elif hl > _ZOMBIE_HARI:
-            continue                         # zombie, buang
+            telat.append((r, hl))            # dulu: `continue` = nyerah SELAMANYA
         else:
             layak.append((r, hl))            # 0 = baru berakhir hari ini
     # Urut: yang PALING BARU berakhir duluan. Data nunjukin bet umur 0-4 hari ~95-100%
@@ -153,12 +165,30 @@ def run():
     antri = [r for r, _ in layak][:_MAX_CEK_PER_SIKLUS]
     sisa = len(layak) - len(antri)
 
+    # ZOMBIE JANGAN DIBUANG SELAMANYA.
+    # Dulu baris > _ZOMBIE_HARI di-`continue` dan gak pernah dilirik lagi. Diuji
+    # 3 Nov 2026 ke CLOB: 24 dari 24 zombie ternyata closed=True, harga terkunci
+    # 1/0 -- market-nya KELAR SEMUA, evaluate-nya yang berhenti nanya. Akibatnya
+    # 247 hasil menang/kalah ($629) gak pernah kecatat.
+    # Komentar lama ("yg 5-14 hari 0% resolve = macet") nyesatin: begitu lewat 14
+    # hari bot berhenti nanya, jadi 0%-nya bikinan sendiri. Market itu cuma
+    # LAMBAT settle, bukan macet.
+    # Slot-nya sengaja kecil dan TERPISAH dari cap siklus normal, biar nguras
+    # backlog gak nunda resolusi yang segar. Paling TUA duluan: deterministik,
+    # backlog kekuras pasti, dan yang paling tua paling mungkin udah settle.
+    telat.sort(key=lambda x: -x[1])
+    antri_telat = [r for r, _ in telat][:_SLOT_TELAT]
+    antri += antri_telat
+
     if not antri:
-        print(f"✅ {len(kandidat)} belum resolve, tapi semua masih ke depan / zombie — gak ada yg dicek.")
+        print(f"✅ {len(kandidat)} belum resolve, tapi semua masih ke depan — gak ada yg dicek.")
         return
 
     print(f"🔎 {len(kandidat)} belum resolve · cek {len(antri)} paling mungkin resolve"
           + (f" (sisa {sisa} siklus berikut)" if sisa else "") + "…")
+    if antri_telat:
+        print(f"  🧟 + {len(antri_telat)} telat (dari {len(telat)} antre, "
+              f"paling tua {telat[0][1]} hari lewat) — nguras backlog")
     menang_total = kalah_total = belum = 0
     net = 0.0
     seen = set()
