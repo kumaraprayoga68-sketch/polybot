@@ -120,6 +120,35 @@ def _snapshot_posisi(wallet):
 # yang sama -- kalau dihitung ulang per bet, tiap siklus baca file puluhan kali.
 _rem = {"eksposur": None, "ditolak": 0}
 
+
+def _zona_blok():
+    """(min, max) dari CopyTrade.BLOK_ZONA, atau None kalau eksperimen mati/format aneh.
+
+    Format aneh SENGAJA = mati + teriak di log, bukan crash: salah ketik env var
+    jangan sampai bikin listener 24/7 tumbang.
+    """
+    teks = (CopyTrade.BLOK_ZONA or "").strip()
+    if not teks:
+        return None
+    try:
+        lo, hi = (float(x) for x in teks.split("-"))
+    except ValueError:
+        print(f"  ⚠️  BLOK_ZONA={teks!r} gak kebaca (format: 0.30-0.50) — zona bayangan MATI")
+        return None
+    return (lo, hi) if lo < hi else None
+
+
+def di_zona_blok(harga):
+    """True kalau harga masuk [min, max) zona bayangan. Batas bawah ikut, atas enggak
+    -- sama persis kayak pembagian zona di dashboard (0.50 masuk zona 0.50-0.70)."""
+    z = _zona_blok()
+    if z is None or harga is None:
+        return False
+    try:
+        return z[0] <= float(harga) < z[1]
+    except (TypeError, ValueError):
+        return False
+
 # Alert bet DIKUMPULIN dulu, dikirim SEKALI per siklus. Dulu 1 pesan per bet:
 # pernah 25 bet di menit yang sama = 25 pesan beruntun -> Telegram 429 -> pesannya
 # ilang DAN balasan command kamu ketahan selama jeda hukuman (bot kelihatan lemot).
@@ -271,6 +300,23 @@ def _evaluasi_sinyal(cid, outcome, info, pendukung, performa):
                       outcome=outcome, harga=harga, skor=skor, end_date=info.get("end_date", ""),
                       keterangan="Kelly=0 (harga gak ngasih edge)")
         print(f"  ⏭️  SKIP(Kelly) {info['market'][:45]} — harga ${harga} gak ada edge")
+        return False
+
+    # ZONA BAYANGAN (lihat CopyTrade.BLOK_ZONA). Dicek SETELAH skor & sizing, bukan
+    # bareng filter harga di atas: yang mau diukur itu "bet yang BENERAN bakal
+    # kejadian" di zona ini. Kalau dicek duluan, sinyal yang toh bakal di-SKIP
+    # skor/Kelly ikut kecatat dan ngotorin sampelnya.
+    # Dicek SEBELUM rem eksposur: bayangan gak makan plafon, dan pengukurannya
+    # gak boleh bolong cuma gara-gara plafon lagi penuh.
+    if di_zona_blok(harga):
+        tracker.catat("copytrade", "bayangan", market=info["market"][:60], condition_id=cid,
+                      outcome=outcome, harga=harga, size_usd=size, skor=skor,
+                      end_date=info.get("end_date", ""),
+                      trader="|".join(pendukung),
+                      keterangan=f"zona blok {CopyTrade.BLOK_ZONA} · seandainya ikut "
+                                 f"({len(pendukung)} trader)")
+        print(f"  👻 BAYANGAN {info['market'][:42]} '{outcome}' @ ${harga} "
+              f"— zona {CopyTrade.BLOK_ZONA} diblok, dicatat buat diukur")
         return False
 
     # REM EKSPOSUR: tolak kalau bikin total posisi terbuka lewat plafon. Dicek

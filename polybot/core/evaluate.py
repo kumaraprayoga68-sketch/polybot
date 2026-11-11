@@ -106,7 +106,33 @@ def _kunci_hasil(rows):
     Dibangun sekali jadi set: 0,06 detik.
     """
     return {(r.get("condition_id"), r.get("outcome"))
-            for r in rows if r.get("aksi") == "hasil"}
+            for r in rows if r.get("aksi") in ("hasil", "hasil_bayangan")}
+
+
+def ringkas_bayangan(rows):
+    """Skor eksperimen zona bayangan (lihat config.CopyTrade.BLOK_ZONA).
+
+    z = (menang - jumlah harga) / sqrt(jumlah harga*(1-harga)) -- seberapa jauh
+    win rate nyata dari yang DIJANJIIN harga pasar. Itu angka yang dipakai aturan
+    putus di config, jadi dihitung di SATU tempat ini aja.
+    """
+    import math
+    h = [r for r in rows if r.get("aksi") == "hasil_bayangan"]
+    n = len(h)
+    if not n:
+        return None
+
+    def f(v):
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    menang = sum(1 for r in h if r.get("menang") == "true")
+    tersirat = sum(f(r.get("harga")) for r in h)
+    var = sum(f(r.get("harga")) * (1 - f(r.get("harga"))) for r in h)
+    return {"n": n, "menang": menang, "tersirat": tersirat,
+            "z": (menang - tersirat) / math.sqrt(var) if var > 0 else 0.0,
+            "pnl": sum(f(r.get("pnl")) for r in h)}
 
 
 def _pnl_paper(size, harga, menang):
@@ -132,7 +158,7 @@ def run():
 
     sudah = _kunci_hasil(rows)
     kandidat = [r for r in rows
-                if r.get("aksi") in ("ikut", "eksekusi")
+                if r.get("aksi") in ("ikut", "eksekusi", "bayangan")
                 and r.get("condition_id") and r.get("outcome")
                 and (r["condition_id"], r["outcome"]) not in sudah]
 
@@ -191,6 +217,8 @@ def run():
               f"paling tua {telat[0][1]} hari lewat) — nguras backlog")
     menang_total = kalah_total = belum = 0
     net = 0.0
+    bay_menang = bay_kalah = 0
+    bay_net = 0.0
     seen = set()
 
     for r in antri:
@@ -206,6 +234,26 @@ def run():
 
         menang = bool(status.get("menang"))
         pnl = _pnl_paper(r.get("size_usd"), r.get("harga"), menang)
+
+        if r.get("aksi") == "bayangan":
+            # resolved SENGAJA dikosongin: dashboard, scorecard, dan rem eksposur
+            # semua nyaring pakai resolved / aksi=="hasil". Bayangan gak boleh
+            # nyampur ke PnL asli -- duitnya gak pernah dipasang.
+            tracker.catat("copytrade", "hasil_bayangan", market=r.get("market", "")[:60],
+                          condition_id=cid, outcome=outcome, harga=r.get("harga"),
+                          size_usd=r.get("size_usd"), skor=r.get("skor"),
+                          trader=r.get("trader", ""),
+                          resolved="", menang="true" if menang else "false", pnl=pnl,
+                          keterangan=("BAYANGAN MENANG" if menang else "BAYANGAN KALAH"))
+            bay_net += pnl
+            if menang:
+                bay_menang += 1
+            else:
+                bay_kalah += 1
+            print(f"  👻 {'MENANG' if menang else 'KALAH '} {r.get('market','')[:45]} "
+                  f"'{outcome}' pnl ${pnl:+.2f} (bayangan, gak dihitung)")
+            continue
+
         net += pnl
         if menang:
             menang_total += 1
@@ -229,7 +277,16 @@ def run():
     print(f"  Belum resolve: {belum}")
     print(f"  Net PnL (paper): ${net:+.2f}")
 
-    if dievaluasi:
+    baris_bay = []
+    if bay_menang + bay_kalah:
+        rb = ringkas_bayangan(tracker.baca_semua())
+        if rb:
+            baris_bay = [f"👻 Bayangan +{bay_menang + bay_kalah} ({bay_menang}W/{bay_kalah}L, "
+                         f"${bay_net:+.2f}) · total {rb['n']}/300: menang {rb['menang']} vs "
+                         f"tersirat {rb['tersirat']:.1f}, z={rb['z']:+.2f}"]
+            print("  " + baris_bay[0])
+
+    if dievaluasi or baris_bay:
         notify.alert_sinyal("📊 Evaluasi hasil polybot", [
             f"Dievaluasi: {dievaluasi} ({menang_total}W/{kalah_total}L, wr {wr:.0f}%)",
-            f"Net PnL (paper): ${net:+.2f}", f"Belum resolve: {belum}"])
+            f"Net PnL (paper): ${net:+.2f}", f"Belum resolve: {belum}"] + baris_bay)

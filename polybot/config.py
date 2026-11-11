@@ -111,6 +111,27 @@ class CopyTrade:
     # tapi uji BERSIH-nya gagal — zona 0.50-0.85 yang diprediksi untung malah
     # -$31 di 3.480 bet (t=-0.28). Dibalikin ke 0.15 pada 13 Agu.
     MIN_ENTRY_PRICE     = _env_float("MIN_ENTRY_PRICE", 0.15)
+    # --- ZONA BAYANGAN: eksperimen yang aturannya DITULIS DULUAN (11 Nov 2026) ---
+    # Sinyal yang harganya di [BLOK_ZONA_MIN, BLOK_ZONA_MAX) gak di-bet, tapi
+    # dicatat sebagai aksi="bayangan" (lengkap dengan size seandainya ikut) lalu
+    # dievaluasi kayak bet biasa -> baris "hasil_bayangan". Gak makan plafon
+    # eksposur, gak masuk PnL/dashboard (resolved dikosongin), tapi zona-nya
+    # tetep bisa diukur.
+    #
+    # Kenapa zona ini: 0.30-0.50 minus di SEMUA periode yang dicek -- Jul-Sep
+    # n=11.761 z=-1.17 -$320, dan tiap minggu sejak Okt z negatif (5 dari 5),
+    # minggu 4-11 Nov n=46 menang 7 vs tersirat 18.8 (z=-3.57). Total -$443.
+    # Tapi INGET catatan MIN_ENTRY_PRICE di atas: zona yang keliatan bagus/jelek
+    # pas dipilih sambil liat data pernah gagal pas diuji bersih. Makanya bukan
+    # dibuang diam-diam -- tetep diukur.
+    #
+    # ATURAN PUTUS (jangan diubah setelah liat hasilnya):
+    #   setelah >= 300 hasil_bayangan, hitung z = (menang - jumlah harga) /
+    #   sqrt(jumlah harga*(1-harga)).
+    #     z <= -1.0  -> blokir permanen (zona ini emang bocor).
+    #     z >  -1.0  -> buka lagi (BLOK_ZONA="" ), kemarin cuma apes.
+    # Format "0.30-0.50". String kosong = eksperimen mati, semua zona di-bet.
+    BLOK_ZONA           = os.getenv("BLOK_ZONA", "0.30-0.50")
     # --- UKURAN BET: berbasis SHARE, bukan dolar ---
     # Polymarket minimum 5 SHARE per order (bukan 5 dolar), jadi biaya minimum =
     # 5 x harga: $0.75 di harga $0.15, tapi $4.25 di harga $0.85. Bet flat $2.50
