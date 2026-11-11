@@ -59,15 +59,18 @@ def _live_allowed(usd_amount):
 
 
 def token_id_for_outcome(condition_id, outcome_text):
-    """Cari token_id buat order dari conditionId + nama outcome ('Yes'/'No')."""
+    """Cari token_id buat order dari conditionId + nama outcome ('Yes'/'No').
+
+    Pencocokannya dipinjem dari resolver.cari_token — SENGAJA satu fungsi, bukan
+    disalin. Dulu logikanya kembar di dua tempat dan cuma salah satu yang dibenerin
+    waktu ketemu bug apostrof (lihat resolver._normal); kalau sisi ini ketinggalan,
+    efeknya bukan "hasil gak kecatat" tapi order yang GAK JADI DIPASANG.
+    """
+    from . import resolver
     client = _get_client()
     market = client.get_market(condition_id)
-    if not market or "tokens" not in market:
-        return None
-    for t in market["tokens"]:
-        if t.get("outcome", "").strip().lower() == outcome_text.strip().lower():
-            return t.get("token_id")
-    return None
+    token = resolver.cari_token(market, outcome_text)
+    return token.get("token_id") if token else None
 
 
 def place_market_buy(condition_id, outcome_text, usd_amount):
