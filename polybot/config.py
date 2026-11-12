@@ -126,8 +126,14 @@ class CopyTrade:
     # dibuang diam-diam -- tetep diukur.
     #
     # ATURAN PUTUS (jangan diubah setelah liat hasilnya):
-    #   setelah >= 300 hasil_bayangan, hitung z = (menang - jumlah harga) /
-    #   sqrt(jumlah harga*(1-harga)).
+    #   setelah >= 300 hasil_bayangan DAN eksperimen udah jalan >= 14 hari
+    #   (mulai 2026-11-11, jadi paling cepet 2026-11-25), hitung
+    #   z = (menang - jumlah harga) / sqrt(jumlah harga*(1-harga)).
+    #   Kenapa syarat 14 hari (ditambah 12 Nov, waktu baru 41 hasil, z=+0.53 --
+    #   belum nunjuk arah apa-apa, jadi ini BUKAN ngakalin hasil): bayangan masuk
+    #   ~20/jam, 300 kekumpul dalam sehari-dua. Itu isinya cuma 1-2 malam
+    #   pertandingan yang sama -> bet-nya gak independen -> z keliatan lebih
+    #   yakin dari aslinya. 2 minggu = banyak hari pertandingan yang beda.
     #     z <= -1.0  -> blokir permanen (zona ini emang bocor).
     #     z >  -1.0  -> buka lagi (BLOK_ZONA="" ), kemarin cuma apes.
     # Format "0.30-0.50". String kosong = eksperimen mati, semua zona di-bet.
