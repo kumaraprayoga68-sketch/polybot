@@ -75,9 +75,17 @@ def _persist_riwayat():
     30 menit, jadi ini yang bikin datanya kesimpen — bukan nunggu hunt.yml.
 
     Sengaja DIEM: kegagalan git gak boleh matiin loop, dan gak usah spam Telegram.
+
+    Sejak ada DB (core/db.py, 16 Nov 2026): tiap siklus cuma flush ekor ke DB;
+    commit ke git jadi SNAPSHOT tiap db.SNAPSHOT_JAM. Kalau DB mati / gak
+    dikonfigurasi, balik ke perilaku lama (commit tiap siklus).
     """
+    from . import db
+    db.flush()                      # no-op kalau DB gak dipakai
     if not os.getenv("GITHUB_ACTIONS"):
         return                      # cuma relevan di CI, gak ganggu run lokal
+    if not db.waktunya_snapshot():
+        return
     import subprocess
 
     def git(*args, t=120):
@@ -101,7 +109,8 @@ def _persist_riwayat():
         if git("pull", "--rebase", "--autostash", "origin", "main").returncode != 0:
             git("rebase", "--abort")
             return
-        git("push", "origin", "HEAD:main")
+        if git("push", "origin", "HEAD:main").returncode == 0:
+            db.tandai_snapshot()
     except Exception:
         pass                        # apa pun yang salah, loop harus tetap jalan
 
@@ -866,6 +875,15 @@ def run():
         print(f"❌ Gagal konek Telegram: {e}")
         return
 
+    # DB dulu, SEBELUM worker jalan: gabungin baris yang ketinggalan di snapshot
+    # git (ditulis listener sebelumnya setelah commit terakhirnya) biar dedup
+    # gak nge-bet ulang posisi yang udah di-bet. Penangkap sinyal cuma bisa
+    # dipasang dari main thread, makanya di sini.
+    from . import db
+    db.pasang_penangkap_sinyal()
+    pulih = db.pulihkan()
+    print(f"💾 penyimpanan: {pulih}")
+
     threading.Thread(target=_job_worker, daemon=True).start()
     _register_commands()
 
@@ -893,7 +911,12 @@ def run():
         pass
 
     print(f"🤖 Telegram control aktif sebagai @{bot_name}. Kirim /help di chat kamu.")
-    send("🤖 <b>polybot control ONLINE</b>\nKirim /help buat lihat command.")
+    if pulih.get("mode") == "db":
+        info_db = (f"💾 DB: +{pulih.get('riwayat_ditambah', 0)} baris riwayat"
+                   f", {pulih.get('dampak_berubah', 0)} dampak dari ekor DB")
+    else:
+        info_db = f"💾 mode git ({html.escape(str(pulih.get('alasan', ''))[:80])})"
+    send(f"🤖 <b>polybot control ONLINE</b>\n{info_db}\nKirim /help buat lihat command.")
 
     # AUTO-LOOP: kalau di-set, mulai loop otomatis pas boot biar nyambung terus
     # walau listener restart (mis. di GitHub Actions ~tiap 5,5 jam). Tanpa ini,

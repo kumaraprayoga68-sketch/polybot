@@ -53,10 +53,16 @@ def scorecard():
     file lokal tiap mesin. Fallback ke file lokal kalau fetch gagal.
     """
     txt, src = None, "GitHub (CI)"
+    # Di CI file lokal = paling lengkap: snapshot git sekarang cuma tiap 3 jam
+    # (core/db.py), jadi versi GitHub bisa ketinggalan sampai 3 jam.
+    lokal = os.path.join(config.Common.DATA_DIR, "riwayat.csv")
+    if os.getenv("GITHUB_ACTIONS") and os.path.exists(lokal):
+        txt, src = open(lokal, encoding="utf-8").read(), "lokal listener (paling baru)"
     try:
-        r = requests.get(config.POLYBOT_HISTORY_URL, timeout=10)
-        if r.ok:
-            txt = r.text
+        if not txt:
+            r = requests.get(config.POLYBOT_HISTORY_URL, timeout=10)
+            if r.ok:
+                txt = r.text
     except Exception:
         pass
     if not txt:

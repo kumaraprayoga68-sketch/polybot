@@ -39,14 +39,21 @@ def baca():
         return dict(_DEFAULT)
 
 
-def tulis(prefs):
-    """Simpan prefs. Balikin True kalau sukses."""
+def tulis(prefs, ke_db=True):
+    """Simpan prefs. Balikin True kalau sukses.
+
+    ke_db: ikut diantre ke DB (core/db.py) biar /trader block gak ilang pas
+    restart walau snapshot git cuma tiap 3 jam. db.py sendiri manggil dengan
+    False pas boot (mulihin dari DB -> jangan dikirim balik)."""
     try:
         with open(_path(), "w", encoding="utf-8") as f:
             json.dump(prefs, f, indent=2)
-        return True
     except Exception:
         return False
+    if ke_db:
+        from . import db
+        db.antre_kv("trader_prefs", json.dumps(prefs))
+    return True
 
 
 def terapkan(wallets):

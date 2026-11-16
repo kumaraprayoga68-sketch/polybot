@@ -56,7 +56,11 @@ def _baca():
         return []
 
 
-def _tulis(rows):
+def _tulis(rows, ke_db=True):
+    """Tulis ulang file. `ke_db` cuma penanda dari pemanggil (db.py pas boot
+    lewat False); antre ke DB dilakuin di catat_baru/ukur_jatuh_tempo yang tau
+    baris MANA yang berubah — ngirim 80rb baris tiap siklus bakal ngabisin
+    kuota egress Neon."""
     p = _path()
     os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
     tmp = p + ".tmp"
@@ -88,6 +92,7 @@ def catat_baru(posisi_baru):
     sudah = {(r["wallet"], r["condition_id"], r["outcome"]) for r in rows}
     ts = _sekarang().isoformat(timespec="seconds")
     n = 0
+    baru = []
     for p in posisi_baru:
         kunci = (p["wallet"], p["condition_id"], p["outcome"])
         if kunci in sudah or not p.get("token_id") or not p.get("harga"):
@@ -97,9 +102,12 @@ def catat_baru(posisi_baru):
                      "condition_id": p["condition_id"], "outcome": p["outcome"],
                      "token_id": p["token_id"], "market": (p.get("market") or "")[:60],
                      "p0": f"{float(p['harga']):.4f}"})
+        baru.append(rows[-1])
         n += 1
     if n:
         _tulis(rows)
+        from . import db
+        db.antre_dampak(baru)
     return n
 
 
@@ -109,6 +117,7 @@ def ukur_jatuh_tempo(maks=_MAKS_UKUR):
     if not rows:
         return 0
     diukur = 0
+    berubah = []
     for r in rows:
         if diukur >= maks:
             break
@@ -120,6 +129,7 @@ def ukur_jatuh_tempo(maks=_MAKS_UKUR):
                 continue
             if umur > _MENYERAH:
                 r[kolom] = "-"          # kelewat, tandai biar gak dicoba terus
+                berubah.append(r)
                 continue
             harga = api.clob_midpoint(r["token_id"])
             diukur += 1
@@ -127,9 +137,12 @@ def ukur_jatuh_tempo(maks=_MAKS_UKUR):
             # gerak sepenuhnya ke satu sisi), jadi dicatat apa adanya.
             r[kolom] = f"{harga:.4f}" if harga is not None else "-"
             r["ts1" if kolom == "p1" else "ts6"] = _sekarang().isoformat(timespec="seconds")
+            berubah.append(r)
             break                        # 1 pengukuran per baris per siklus
-    if diukur:
+    if diukur or berubah:
         _tulis(rows)
+        from . import db
+        db.antre_dampak(berubah)
     return diukur
 
 

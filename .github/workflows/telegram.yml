@@ -65,6 +65,9 @@ jobs:
       # dibaca). Dulu bikin evaluate bahaya molor (1100 resolusi x POST timeout 5s).
       # POLYBOT_DASHBOARD_URL: ${{ secrets.POLYBOT_DASHBOARD_URL }}
       # wallet buat /live (isi Secrets repo). Kosong = /live nolak otomatis.
+      # Ekor data di Postgres (Neon) — lihat polybot/core/db.py. Kosong = mode git
+      # lama (commit riwayat tiap siklus). Isi lewat Settings -> Secrets.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
       FUNDER_ADDRESS: ${{ secrets.FUNDER_ADDRESS }}
     steps:
@@ -73,7 +76,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install deps
-        run: pip install requests python-dotenv py-clob-client
+        run: pip install requests python-dotenv py-clob-client "psycopg[binary]"
 
       - name: Jalankan listener (~5j40m lalu exit buat restart)
         id: listen

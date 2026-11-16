@@ -72,6 +72,11 @@ def catat(strategi, aksi, **kw):
         _kunci_cache.add((row.get("condition_id", ""), row.get("outcome", "")))
         _cache_stat = _stat(path)
 
+    # Antre ke DB (Neon) — dikirim sekali di akhir siklus, lihat core/db.py.
+    # No-op kalau DATABASE_URL kosong.
+    from . import db
+    db.antre_riwayat(row)
+
     # Push ke dashboard Vercel (fail-safe; gak nge-block kalau gagal/gak dikonfigurasi).
     event = dict(row)
     event["id"] = "EVT-" + uuid.uuid4().hex[:12]
